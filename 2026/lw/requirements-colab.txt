@@ -1,0 +1,12 @@
+# Основное окружение Google Colab для УМК
+pyspark==4.2.0
+pandas
+numpy
+pyarrow
+plotly
+rosbags==0.11.5
+mcap==1.4.0
+mcap-ros2-support==0.5.7
+
+# Опционально для ЛР-6 (устанавливать отдельной ячейкой из-за дополнительных зависимостей):
+# lerobot[dataset]
