@@ -5,77 +5,63 @@
 **Профиль:** «Информатика и дополнительное образование (робототехника)»  
 **Этапы пайплайна:** `Learn -> Teach`
 
-$$
-\boxed{
-\text{Sense}\rightarrow
-\text{Collect}\rightarrow
-\text{Stream}\rightarrow
-\text{Store}\rightarrow
-\text{Process}\rightarrow
-\text{Learn}\rightarrow
-\text{Teach}
-}
-$$
+```mermaid
+flowchart LR
+    S0["Sense"]
+    S1["Collect"]
+    S2["Stream"]
+    S3["Store"]
+    S4["Process"]
+    S5["Learn"]
+    S6["Teach"]
+    S0 --> S1
+    S1 --> S2
+    S2 --> S3
+    S3 --> S4
+    S4 --> S5
+    S5 --> S6
+```
 
 ## 1. Тема и план лекции
 
-1. Spark MLlib Pipeline API: `Transformer`, `Estimator`, признаки, разбиение train/test и утечка данных (`data leakage`).
-2. Метрики классификации и регрессии, функции потерь.
-3. Распределённое обучение с параллелизмом по данным (`data parallelism`) и стоимость синхронизации.
-4. Крупные робототехнические наборы данных: Open X-Embodiment и Hugging Face LeRobot.
-5. Потоковый доступ к наборам данных и проектирование школьных/олимпиадных проектов по данным.
+1. Spark MLlib Pipeline API: Transformers, Estimators, features, train/test split и data leakage.
+2. Метрики классификации/регрессии и функции потерь.
+3. Data-parallel distributed training и стоимость синхронизации.
+4. Большие робототехнические datasets: Open X-Embodiment и Hugging Face LeRobot.
+5. Streaming datasets и проектирование школьных/олимпиадных data-проектов.
 
-После лекции студент должен уметь построить воспроизводимый ML-конвейер над телеметрией, выбрать адекватные метрики, объяснить синхронный параллелизм по данным и спроектировать педагогическую адаптацию сложного робототехнического конвейера данных.
-
-> **Технологическая база на 31.08.2026:** Apache Spark 4.2.0; LeRobotDataset v3 поддерживает хранение нескольких эпизодов в Parquet/MP4 и потоковый доступ через `StreamingLeRobotDataset`. Версии библиотек в лабораторных работах следует фиксировать.
+После лекции студент должен уметь построить воспроизводимый ML pipeline над телеметрией, выбрать адекватные метрики, объяснить synchronous data parallelism и спроектировать педагогическую адаптацию сложного robotics data pipeline.
 
 ---
 
-## 2. ML-конвейер
+## 2. ML pipeline
 
 Корректная последовательность:
 
-```text
-raw telemetry
-      |
-validate / clean
-      |
-feature extraction
-      |
-train/test split
-      |
-fit preprocessing on train
-      |
-fit model
-      |
-evaluate on test
-      |
-deploy / monitor
+```mermaid
+flowchart TD
+    RAW["Raw telemetry"] --> CLEAN["Validate / clean"]
+    CLEAN --> FE["Feature extraction"]
+    FE --> SPLIT["Train / test split"]
+    SPLIT --> PREP["Fit preprocessing on train"]
+    PREP --> FIT["Fit model"]
+    FIT --> EVAL["Evaluate on test"]
+    EVAL --> DEP["Deploy / monitor"]
 ```
 
-Главное ограничение: операции, параметры которых оцениваются по данным, не должны использовать тестовую выборку на этапе обучения.
+Главное ограничение: операции, использующие статистики данных, не должны видеть test set при обучении.
 
-### Утечка данных (Data leakage)
+### Data leakage
 
-Если среднее и стандартное отклонение для нормализации рассчитаны на полном наборе данных, то при $N=N_{train}+N_{test}$:
+Если mean/std для нормализации рассчитаны на полном dataset:
 
-$$
-\mu=
-\frac{1}{N}
-\sum_{i\in train\cup test}x_i,
-$$
+$$\mu=\frac{1}{N_{\mathrm{train}}+N_{\mathrm{test}}}\sum_{i=1}^{N}x_i.$$
 
-информация тестовой выборки участвует в предварительной обработке. В результате оценка качества может стать оптимистичной.
+то информация test set участвует в preprocessing. Оценка становится оптимистичной.
 
-Корректно оценивать параметры преобразования только на обучающей выборке:
+Правильно:
 
-$$
-\mu_{train}=
-\frac{1}{N_{train}}
-\sum_{i\in train}x_i.
-$$
-
-Затем уже обученный преобразователь применяется к `test` без повторной подгонки (`fit`).
+$$\mu_{\mathrm{train}}=\frac{1}{N_{\mathrm{train}}}\sum_{i\in\mathrm{train}}x_i.$$
 
 ---
 
@@ -83,9 +69,7 @@ $$
 
 **Transformer**
 
-$$
-T:D\rightarrow D'.
-$$
+$$T:D\rightarrow D'.$$
 
 Имеет:
 
@@ -96,14 +80,12 @@ transform(dataset)
 Примеры:
 
 - `VectorAssembler`;
-- обученная модель `StandardScalerModel`;
-- обученная модель классификации или регрессии.
+- fitted `StandardScalerModel`;
+- fitted classification/regression model.
 
 **Estimator**
 
-$$
-E:D\rightarrow T.
-$$
+$$E:D\rightarrow T.$$
 
 Имеет:
 
@@ -117,51 +99,27 @@ fit(dataset)
 - `LogisticRegression`;
 - `RandomForestClassifier`.
 
-```text
-VectorAssembler
-    |
-    v
-StandardScaler
-  Estimator
-    |
-    v
-ScalerModel
- Transformer
-    |
-    v
-RandomForestClassifier
-    |
-    v
-RandomForestClassificationModel
+```mermaid
+flowchart TD
+    VA["VectorAssembler<br/>Transformer"] --> SS["StandardScaler<br/>Estimator"]
+    SS --> SM["StandardScalerModel<br/>Transformer"]
+    SM --> RF["RandomForestClassifier<br/>Estimator"]
+    RF --> RM["RandomForestClassificationModel<br/>Transformer"]
 ```
 
-`Pipeline` сам является `Estimator`: вызов `fit()` последовательно обучает стадии, которым требуется подгонка, и формирует `PipelineModel` из готовых `Transformer`-стадий.
+Pipeline сам является Estimator: `fit()` последовательно обучает стадии и формирует `PipelineModel`.
 
 ---
 
-## 4. Проектирование признаков телеметрии
+## 4. Feature engineering телеметрии
 
 Окно сырого сигнала:
 
-$$
-x_1,\dots,x_N
-$$
+$$x_1,\dots,x_N$$
 
 преобразуется в признаки:
 
-$$
-\mathbf{z}
-=
-[
-\mu,
-\sigma,
-RMS,
-min,
-max,
-slope,
-entropy
-]^T.
-$$
+$$\mathbf{z}=[\mu,\sigma,\mathrm{RMS},\min,\max,\mathrm{slope},H]^T.$$
 
 Для робота:
 
@@ -180,50 +138,32 @@ accel_rms
 
 ## 5. Метрики классификации
 
-```text
-                 predicted
-               0           1
-actual 0       TN          FP
-actual 1       FN          TP
-```
+| Фактический класс | Предсказано 0 | Предсказано 1 |
+|---|---:|---:|
+| **0** | TN | FP |
+| **1** | FN | TP |
 
 Precision:
 
-$$
-Precision=
-\frac{TP}{TP+FP}.
-$$
+$$\mathrm{Precision}=\frac{TP}{TP+FP}.$$
 
 Recall:
 
-$$
-Recall=
-\frac{TP}{TP+FN}.
-$$
+$$\mathrm{Recall}=\frac{TP}{TP+FN}.$$
 
 F1:
 
-$$
-F_1=
-2\cdot
-\frac{Precision\cdot Recall}
-{Precision+Recall}.
-$$
+$$F_1=2\cdot\frac{\mathrm{Precision}\cdot\mathrm{Recall}}{\mathrm{Precision}+\mathrm{Recall}}.$$
 
-Для диагностики отказов высокая `Recall` уменьшает число пропущенных неисправностей, а низкая `Precision` означает большое число ложных тревог (`false positives`).
+Для диагностики отказа высокая Recall уменьшает число пропущенных неисправностей; низкий Precision создаёт много ложных alerts.
 
 ### Macro-F1
 
 Для $K$ классов:
 
-$$
-F_1^{macro}
-=
-\frac{1}{K}
-\sum_{k=1}^{K}F_{1,k}.
-$$
+$$F_1^{\mathrm{macro}}=\frac{1}{K}\sum_{k=1}^{K}F_{1,k}.$$
 
-Macro-F1 полезна при несбалансированных классах, когда вклад каждого класса в итоговую оценку должен быть одинаковым независимо от его частоты. Важно: `MulticlassClassificationEvaluator(metricName="f1")` в Spark MLlib вычисляет **weighted F1**, а не Macro-F1.
+Macro-F1 полезна при несбалансированных классах, когда качество каждого класса должно влиять одинаково.
 
 ---
 
@@ -231,32 +171,15 @@ Macro-F1 полезна при несбалансированных класса
 
 MAE:
 
-$$
-MAE=
-\frac{1}{N}
-\sum_{i=1}^{N}
-|y_i-\hat{y}_i|.
-$$
+$$\mathrm{MAE}=\frac{1}{N}\sum_{i=1}^{N}|y_i-\hat{y}_i|.$$
 
 MSE:
 
-$$
-MSE=
-\frac{1}{N}
-\sum_{i=1}^{N}
-(y_i-\hat{y}_i)^2.
-$$
+$$\mathrm{MSE}=\frac{1}{N}\sum_{i=1}^{N}(y_i-\hat{y}_i)^2.$$
 
 RMSE:
 
-$$
-RMSE=
-\sqrt{
-\frac{1}{N}
-\sum_{i=1}^{N}
-(y_i-\hat{y}_i)^2
-}.
-$$
+$$\mathrm{RMSE}=\sqrt{\frac{1}{N}\sum_{i=1}^{N}(y_i-\hat{y}_i)^2}.$$
 
 RMSE сильнее штрафует крупные ошибки.
 
@@ -266,24 +189,13 @@ RMSE сильнее штрафует крупные ошибки.
 
 Для многоклассовой классификации:
 
-$$
-\mathcal{L}
-=
--\sum_{k=1}^{K}y_k\log p_k.
-$$
+$$\mathcal{L}=-\sum_{k=1}^{K}y_k\log p_k.$$
 
 Для batch:
 
-$$
-\mathcal{L}_{batch}
-=
--\frac{1}{N}
-\sum_{i=1}^{N}
-\sum_{k=1}^{K}
-y_{ik}\log p_{ik}.
-$$
+$$\mathcal{L}_{\mathrm{batch}}=-\frac{1}{N}\sum_{i=1}^{N}\sum_{k=1}^{K}y_{ik}\log p_{ik}.$$
 
-Cross-entropy — дифференцируемая функция потерь для обучения модели, а F1 — метрика дискретных предсказаний после применения порога (`threshold`) или `argmax`. Эти показатели решают разные задачи и не являются взаимозаменяемыми.
+Cross-entropy — функция потерь, F1 — метрика итоговых решений после threshold/argmax. Их нельзя использовать как взаимозаменяемые показатели.
 
 ---
 
@@ -295,7 +207,7 @@ Cross-entropy — дифференцируемая функция потерь �
 from pyspark.sql import SparkSession
 from pyspark.ml import Pipeline
 from pyspark.ml.feature import VectorAssembler, StandardScaler
-from pyspark.ml.classification import LogisticRegression
+from pyspark.ml.classification import RandomForestClassifier
 from pyspark.ml.evaluation import MulticlassClassificationEvaluator
 
 spark = (
@@ -306,17 +218,11 @@ spark = (
 )
 
 data = [
-    (46.0, 0.16, 12.4, 2.0, 0.0),
-    (47.0, 0.18, 12.3, 2.1, 0.0),
     (48.0, 0.20, 12.2, 2.5, 0.0),
     (49.0, 0.22, 12.1, 2.8, 0.0),
-    (50.0, 0.25, 12.0, 3.0, 0.0),
-    (51.0, 0.28, 11.9, 3.1, 0.0),
-    (58.0, 0.55, 11.6, 4.0, 1.0),
-    (60.0, 0.62, 11.5, 4.3, 1.0),
-    (61.0, 0.65, 11.4, 4.4, 1.0),
     (64.0, 0.70, 11.2, 4.7, 1.0),
-    (65.0, 0.76, 11.1, 4.9, 1.0),
+    (61.0, 0.65, 11.4, 4.4, 1.0),
+    (47.0, 0.18, 12.3, 2.1, 0.0),
     (66.0, 0.82, 11.0, 5.0, 1.0),
 ]
 
@@ -350,12 +256,12 @@ scaler = StandardScaler(
     withStd=True,
 )
 
-classifier = LogisticRegression(
+classifier = RandomForestClassifier(
     labelCol="label",
     featuresCol="features",
-    maxIter=100,
-    regParam=0.0,
-    elasticNetParam=0.0,
+    numTrees=50,
+    maxDepth=6,
+    seed=42,
 )
 
 pipeline = Pipeline(
@@ -371,7 +277,7 @@ evaluator = MulticlassClassificationEvaluator(
     metricName="f1",
 )
 
-print("Weighted F1 =", evaluator.evaluate(pred))
+print("F1 =", evaluator.evaluate(pred))
 
 pred.select(
     "temperature",
@@ -382,7 +288,7 @@ pred.select(
 ).show(truncate=False)
 ```
 
-В реальной лабораторной работе набор данных должен быть существенно больше; этот небольшой синтетический пример предназначен только для демонстрации API. Для деревьев решений и Random Forest масштабирование признаков обычно не требуется, поэтому в примере выбран `LogisticRegression`, для которой `StandardScaler` методически оправдан.
+На реальной лабораторной dataset должен быть существенно больше; tiny example предназначен только для демонстрации API.
 
 ---
 
@@ -390,95 +296,52 @@ pred.select(
 
 Пусть:
 
-$$
-D=
-D_1\cup
-D_2\cup\dots\cup
-D_P.
-$$
+$$D=D_1\cup D_2\cup\dots\cup D_P.$$
 
-Каждый worker вычисляет локальный градиент:
+Каждый worker вычисляет gradient:
 
-$$
-g_p=
-\nabla_\theta
-\mathcal{L}(D_p;\theta).
-$$
+$$g_p=\nabla_{\theta}\mathcal{L}(D_p;\theta).$$
 
-При синхронном параллелизме по данным и одинаковом размере локальных batch градиенты усредняются:
+Synchronous data-parallel training:
 
-$$
-g=
-\frac{1}{P}
-\sum_{p=1}^{P}g_p.
-$$
+$$g=\frac{1}{P}\sum_{p=1}^{P}g_p.$$
 
 Обновление:
 
-$$
-\theta_{t+1}
-=
-\theta_t-\eta g.
-$$
+$$\theta_{t+1}=\theta_t-\eta g.$$
 
 ### Архитектура
 
-```text
-                     model theta_t
-                         |
-       +-----------------+-----------------+
-       |                 |                 |
-       v                 v                 v
-+-------------+   +-------------+   +-------------+
-| Worker 0    |   | Worker 1    |   | Worker 2    |
-| batch D0    |   | batch D1    |   | batch D2    |
-| gradient g0 |   | gradient g1 |   | gradient g2 |
-+------+------+   +------+------+   +------+------+
-       |                 |                 |
-       +-----------------+-----------------+
-                         |
-                         v
-                  AllReduce / sync
-                         |
-                         v
-                    averaged g
-                         |
-                         v
-                    update theta
+```mermaid
+flowchart TB
+    M["Model parameters θ_t"]
+    M --> W0["Worker 0<br/>batch D0<br/>gradient g0"]
+    M --> W1["Worker 1<br/>batch D1<br/>gradient g1"]
+    M --> W2["Worker 2<br/>batch D2<br/>gradient g2"]
+    W0 --> AR["AllReduce / synchronization"]
+    W1 --> AR
+    W2 --> AR
+    AR --> G["Averaged gradient g"]
+    G --> U["Update θ"]
 ```
 
 Время шага:
 
-$$
-T_{step}
-=
-T_{forward}
-+
-T_{backward}
-+
-T_{sync}.
-$$
+$$T_{\mathrm{step}}=T_{\mathrm{forward}}+T_{\mathrm{backward}}+T_{\mathrm{sync}}.$$
 
 Эффективность:
 
-$$
-E(P)=
-\frac{T(1)}{P\,T(P)}.
-$$
+$$E(P)=\frac{T(1)}{P\,T(P)}.$$
 
 Для модели с $M$ параметров `float32` размер одного gradient vector:
 
-$$
-S_g=4M\;bytes.
-$$
+$$S_g=4M\ \mathrm{bytes}.$$
 
 Для $M=100$ млн:
 
-$$
-S_g\approx400\;MB.
-$$
+$$S_g\approx400\ \mathrm{MB}.$$
 
-Следовательно, пропускная способность межсоединения и коллективные операции (`AllReduce`) становятся частью проектирования ML-системы. При различном размере локальных batch простое среднее градиентов необходимо заменить взвешенным по числу примеров.
+Следовательно, interconnect и collective communication становятся частью ML system design.
 
 ---
 
@@ -486,73 +349,59 @@ $$
 
 Spark MLlib хорошо подходит для:
 
-- табличных признаков;
-- распределённой предварительной обработки;
-- классических алгоритмов машинного обучения;
-- конвейеров признаков и моделей;
+- tabular features;
+- distributed preprocessing;
+- classical ML;
+- feature pipelines;
 - крупной агрегированной телеметрии.
 
-PyTorch/JAX/TensorFlow обычно применяются для:
+PyTorch/JAX/TensorFlow — для:
 
 - CNN;
-- Transformer-моделей;
-- Vision-Language-Action (VLA) моделей;
+- Transformers;
+- Vision-Language-Action models;
 - imitation learning;
-- крупных нейросетевых политик управления.
+- large neural policies.
 
-```text
-Data Lake / robotics dataset
-         |
-         +------> Spark / SQL
-         |        quality
-         |        filtering
-         |        statistics
-         |        metadata
-         |
-         v
-PyTorch/JAX training
-         |
-         v
-robot policy
+```mermaid
+flowchart TD
+    DL["Data Lake / robotics dataset"] --> SP["Spark / SQL<br/>quality, filtering, statistics, metadata"]
+    DL --> TR["PyTorch / JAX training"]
+    SP --> TR
+    TR --> POL["Robot policy"]
 ```
 
-Инженерия больших данных не сводится к обучению нейросети: сбор, валидация, фильтрация, хранение и контроль качества данных часто образуют отдельную распределённую подсистему.
+Big Data Engineering не сводится к обучению нейросети; подготовка и контроль данных часто являются отдельной распределённой системой.
 
 ---
 
 ## 11. Open X-Embodiment
 
-Open X-Embodiment объединяет открытые робототехнические наборы данных в унифицированном представлении для последующего использования в исследованиях и обучении моделей.
+Open X-Embodiment унифицирует открытые robot datasets для downstream consumption.
 
-```text
-dataset
- |
- +-- episode
- |    |
- |    +-- step
- |    |    +-- observation
- |    |    +-- action
- |    |
- |    +-- step
- |
- +-- episode
+```mermaid
+flowchart TD
+    DS["Dataset"] --> E1["Episode 1"]
+    DS --> E2["Episode 2"]
+    E1 --> S1["Step 0"]
+    E1 --> S2["Step 1"]
+    S1 --> O1["Observation"]
+    S1 --> A1["Action"]
+    S2 --> O2["Observation"]
+    S2 --> A2["Action"]
 ```
 
 Масштабная линия:
 
-```text
-single robot log
-      |
-many episodes
-      |
-many robots
-      |
-many institutions
-      |
-cross-embodiment dataset
+```mermaid
+flowchart LR
+    L1["Single robot log"] --> L2["Many episodes"]
+    L2 --> L3["Many robots"]
+    L3 --> L4["Many institutions"]
+    L4 --> L5["Cross-embodiment dataset"]
 ```
 
-В курсе Open X-Embodiment используется не как обязательная тяжёлая задача обучения, а как пример масштабирования робототехнических данных, унификации схем и междоменных различий между роботами.
+Курс использует Open X-Embodiment не как обязательный тяжёлый training workload, а как пример масштабирования данных робототехники и стандартизации schema.
 
 Официальный репозиторий:
 
@@ -562,59 +411,46 @@ https://github.com/google-deepmind/open_x_embodiment
 
 ## 12. Hugging Face LeRobotDataset
 
-LeRobotDataset стандартизует синхронизированные мультимодальные временные ряды: видео, состояние робота, действия, описания задач и границы эпизодов.
+LeRobot стандартизует synchronized video, robot state, action, task metadata и episodes.
 
-LeRobotDataset v3 хранит множество эпизодов в более крупных Parquet/MP4-файлах и использует отдельные метаданные для схемы, статистик, задач и границ эпизодов. Это снижает нагрузку на файловую систему по сравнению с подходом «один эпизод — один файл».
+Актуальная архитектура LeRobotDataset v3 использует меньшее число более крупных файлов и сочетает Parquet с видео/metadata.
 
-```text
-LeRobotDataset
- |
- +-- metadata
- |
- +-- Parquet data
- |    +-- actions
- |    +-- states
- |    +-- timestamps
- |
- +-- video files
- |
- +-- episode boundaries
+```mermaid
+flowchart TD
+    L["LeRobotDataset"] --> M["Metadata"]
+    L --> P["Parquet data"]
+    P --> A["Actions"]
+    P --> S["States"]
+    P --> T["Timestamps"]
+    L --> V["Video files"]
+    L --> E["Episode boundaries"]
 ```
 
 Это прямой пример связи:
 
-```text
-robotics
-+
-columnar storage
-+
-video
-+
-metadata
-+
-streaming access
+```mermaid
+flowchart LR
+    R["Robotics"] --> C["Columnar storage"]
+    C --> V["Video"]
+    V --> M["Metadata"]
+    M --> S["Streaming access"]
 ```
 
 ---
 
-## 13. Потоковый доступ к наборам данных
+## 13. Streaming datasets
 
-Пусть набор данных содержит $N$ образцов.
+Пусть dataset содержит $N$ samples.
 
-Полная локальная копия требует объёма хранения порядка:
+Полная локальная копия:
 
-$$
-Storage=O(N).
-$$
+$$\mathrm{Storage}=O(N).$$
 
-Для потокового итератора с ограниченным буфером $B$ объём состояния буфера имеет порядок:
+Streaming с буфером $B$:
 
-$$
-BufferMemory=O(B),
-\quad B\ll N.
-$$
+$$\mathrm{WorkingMemory}=O(B),\qquad B\ll N.$$
 
-LeRobot предоставляет `StreamingLeRobotDataset`, который позволяет итерировать наборы данных непосредственно из Hugging Face Hub без предварительного скачивания полной локальной копии.
+LeRobot предоставляет `StreamingLeRobotDataset`, позволяющий итерировать большие datasets непосредственно из Hub без полной локальной загрузки.
 
 Концептуальный пример:
 
@@ -636,102 +472,54 @@ for i, sample in enumerate(dataset):
         break
 ```
 
-Преимущество — существенно меньшие требования к локальному хранилищу. Ограничения — зависимость от сети, более сложный произвольный доступ и приближённое перемешивание (`shuffle`) через ограниченный буфер. Формула $O(B)$ относится к состоянию буфера итератора, а не ко всей памяти процесса, где дополнительно размещаются декодированные изображения/видео, batch и модель.
+Преимущество — ограниченный local storage. Ограничение — random access и shuffle требуют иной организации и buffer strategy.
 
 ---
 
-## 14. Качество набора данных
+## 14. Качество dataset
 
 ### Missing rate
 
-$$
-MissingRate_j=
-\frac{N_{missing,j}}{N}.
-$$
+$$\mathrm{MissingRate}_j=\frac{N_{\mathrm{missing},j}}{N}.$$
 
 ### Duplicate rate
 
-$$
-DuplicateRate=
-\frac{N_{duplicate}}{N}.
-$$
+$$\mathrm{DuplicateRate}=\frac{N_{\mathrm{duplicate}}}{N}.$$
 
 ### Class probability
 
-$$
-p_k=
-\frac{N_k}{N}.
-$$
+$$p_k=\frac{N_k}{N}.$$
 
 ### Entropy разметки
 
-$$
-H(Y)=
--\sum_k p_k\log_2p_k.
-$$
+$$H(Y)=-\sum_k p_k\log_2p_k.$$
 
-Низкая энтропия меток может быть сигналом сильного дисбаланса классов, но сама по себе не определяет качество набора данных. Дополнительно необходимо анализировать пропуски, дубликаты, покрытие режимов работы, дрейф распределений и корректность временной синхронизации.
+Низкая энтропия может быть сигналом сильного class imbalance, но не является самостоятельной метрикой качества dataset.
 
 ---
 
 ## 15. Сквозной проект курса
 
-```text
-+-------------+
-| Sensors     |
-| IMU/LiDAR   |
-+------+------+ 
-       |
-       v
-+-------------+
-| ROS 2       |
-+------+------+
-       |
-       v
-+-------------+
-| rosbag/MCAP |
-+------+------+
-       |
-       +-------------------+
-       |                   |
-       v                   v
-+-------------+      +-------------+
-| Kafka /     |      | Parquet     |
-| stream      |      | archive     |
-+------+------+      +------+------+
-       |                    |
-       v                    v
-+-------------+       +------------+
-| Streaming   |       | Spark SQL  |
-| features    |       | batch      |
-+------+------+       +------+-----+
-       |                     |
-       +----------+----------+
-                  |
-                  v
-          +---------------+
-          | feature table |
-          +-------+-------+
-                  |
-                  v
-          +---------------+
-          | MLlib / DL    |
-          +-------+-------+
-                  |
-                  v
-            prediction
-                  |
-                  v
-          +---------------+
-          | Teach project |
-          +---------------+
+```mermaid
+flowchart TD
+    SEN["Sensors<br/>IMU / LiDAR"] --> ROS["ROS 2"]
+    ROS --> BAG["rosbag / MCAP"]
+    BAG --> K["Kafka / stream"]
+    BAG --> P["Parquet archive"]
+    K --> SF["Streaming features"]
+    P --> SQL["Spark SQL / batch"]
+    SF --> FT["Feature table"]
+    SQL --> FT
+    FT --> ML["MLlib / Deep Learning"]
+    ML --> PR["Prediction"]
+    PR --> T["Teach project"]
 ```
 
 ---
 
 ## 16. Teach как инженерно-педагогическая операция
 
-`Teach` означает уменьшение инфраструктурной сложности при сохранении ключевых понятий и причинно-следственных связей исходной инженерной задачи.
+`Teach` означает уменьшение infrastructure complexity при сохранении conceptual core.
 
 Университетская версия:
 
@@ -767,24 +555,20 @@ reproducibility
 
 Формально:
 
-$$
-InfrastructureComplexity\downarrow,
-$$
+$$\mathrm{InfrastructureComplexity}\downarrow.$$
 
-$$
-ConceptualCore\approx\text{const}.
-$$
+$$\mathrm{ConceptualCore}=\mathrm{const}.$$
 
 ---
 
 ## 17. Типичные педагогические ошибки
 
 1. Давать модель до объяснения физического происхождения данных.
-2. Использовать `Accuracy` как основную метрику при редком положительном классе.
-3. Нормализовать данные по всему набору до разбиения train/test.
-4. Показывать только готовую нейросеть без конвейера подготовки данных.
-5. Скачивать огромный набор данных ради нескольких демонстрационных образцов.
-6. Считать визуализацию конечным результатом без исследовательского вопроса, базовой линии и метрики.
+2. Использовать Accuracy при редком положительном классе.
+3. Нормализовать по всему dataset до train/test split.
+4. Показывать только готовую нейросеть без data pipeline.
+5. Скачивать огромный dataset ради нескольких samples.
+6. Считать график конечным результатом без исследовательского вопроса и метрики.
 
 ---
 
@@ -809,24 +593,24 @@ accel_rms
 
 Требуется:
 
-1. разбиение на обучающую и тестовую выборки;
-2. конвейер предварительной обработки и классификатор;
-3. `Precision`, `Recall`, F1;
+1. train/test split;
+2. pipeline preprocessing + classifier;
+3. Precision, Recall, F1;
 4. выбор приоритета между FN и FP;
-5. анализ важности признаков (`feature importance`);
+5. анализ feature importance;
 6. оформление `TEACH CARD`.
 
-**Усложнение:** несколько роботов/доменов, `domain shift`, потоковый инференс и мониторинг дрейфа данных/качества.
+**Усложнение:** несколько robots/domains, domain shift, streaming inference и drift monitoring.
 
 ---
 
 ## 19. Контрольные вопросы
 
-1. Почему `scaler` должен обучаться только на train-выборке?
-2. Почему высокий `Accuracy` не гарантирует качественную диагностику редкой неисправности?
-3. Почему коммуникационные накладные расходы ограничивают ускорение распределённого обучения с параллелизмом по данным?
-4. Чем потоковый доступ к набору данных отличается от предварительного скачивания и какие ограничения возникают?
-5. Какие элементы университетской лабораторной по Big Data можно упростить для школьника без потери ключевых понятий?
+1. Почему scaler должен обучаться только на train set?
+2. Почему высокий Accuracy не гарантирует качественную диагностику редкой неисправности?
+3. Почему communication overhead ограничивает ускорение data-parallel training?
+4. Чем streaming dataset отличается от предварительного скачивания и какие ограничения возникают?
+5. Какие элементы университетской Big Data лабораторной можно упростить для школьника без потери conceptual core?
 
 ---
 
