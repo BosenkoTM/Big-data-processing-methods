@@ -19,13 +19,15 @@ $$
 
 ## 1. Тема и план лекции
 
-1. Модель неограниченного потока: throughput, latency, backlog, backpressure.
-2. Apache Kafka: topic, partition, offset, replication, consumer group; KRaft metadata quorum.
-3. Spark Structured Streaming: unbounded table, micro-batch, state, checkpoint.
-4. Event Time, Processing Time, tumbling/sliding/session windows и watermarking.
-5. Apache Flink DataStream и fault tolerance stateful stream processing.
+1. Модель неограниченного потока: пропускная способность (`throughput`), задержка (`latency`), очередь (`backlog`) и обратное давление (`backpressure`).
+2. Apache Kafka: `topic`, `partition`, `offset`, репликация, `consumer group`; кворум метаданных KRaft.
+3. Spark Structured Streaming: неограниченная таблица, микропакетная обработка (`micro-batch`), состояние и контрольные точки (`checkpoint`).
+4. Время события (`Event Time`), время обработки (`Processing Time`), окна и водяные знаки (`watermark`).
+5. Apache Flink DataStream: обработка с состоянием и отказоустойчивость.
 
-После лекции студент должен уметь проектировать поток обработки телеметрии нескольких роботов, выбирать ключ партиционирования Kafka, рассчитывать параметры окна и объяснять восстановление state после сбоя.
+После лекции студент должен уметь проектировать поток обработки телеметрии нескольких роботов, выбирать ключ партиционирования Kafka, рассчитывать параметры окна, объяснять роль `watermark` и восстанавливать состояние потокового приложения после сбоя.
+
+> **Технологическая база на 31.08.2026:** Apache Kafka 4.3.1 (только KRaft), Apache Spark 4.2.0, Apache Flink 2.3. Для лабораторных рекомендуется фиксировать версии в `requirements.txt`/контейнере, а не полагаться на `latest`.
 
 ---
 
@@ -45,15 +47,15 @@ $$
 \rho=\frac{\lambda}{\mu}.
 $$
 
-При $\rho\rightarrow1$ кратковременный burst создаёт backlog и увеличивает latency.
+При $\rho\rightarrow1$ даже кратковременный всплеск (`burst`) создаёт очередь и увеличивает задержку. Условие $\lambda<\mu$ описывает упрощённую стационарную модель; в реальной системе требуется запас производительности из-за неравномерности потока, перекоса ключей (`skew`) и пауз на обслуживание.
 
-### 2.1. Throughput
+### 2.1. Пропускная способность (Throughput)
 
 $$
 Throughput=\frac{N_{events}}{T}.
 $$
 
-### 2.2. End-to-end latency
+### 2.2. Сквозная задержка (End-to-end latency)
 
 $$
 L=t_{result}-t_{event}.
@@ -77,7 +79,7 @@ $$
 N=\lambda W,
 $$
 
-где $N$ — среднее число событий внутри pipeline, $W$ — среднее время пребывания.
+где $N$ — среднее число событий внутри конвейера, $W$ — среднее время пребывания события в системе.
 
 Если одновременно находятся 20 000 событий при 5 000 events/s:
 
@@ -89,7 +91,7 @@ $$
 
 ## 3. Apache Kafka
 
-Kafka хранит события как append-only log внутри partition.
+Kafka хранит события в виде дописываемого журнала (`append-only log`) внутри каждой партиции (`partition`).
 
 ```text
 Topic: robot.telemetry
@@ -113,7 +115,7 @@ $$
 (topic,\ partition,\ offset).
 $$
 
-Offset — позиция внутри partition, а не timestamp.
+`Offset` — позиция записи внутри конкретной партиции, а не временная метка (`timestamp`).
 
 ### 3.1. Key и ordering
 
@@ -123,9 +125,9 @@ Offset — позиция внутри partition, а не timestamp.
 key = robot_id
 ```
 
-события одного робота маршрутизируются детерминированно в одну partition при стабильной схеме partitioning.
+события одного робота маршрутизируются в одну и ту же партицию при неизменных числе партиций и алгоритме партиционирования. Изменение числа партиций может изменить соответствие `key -> partition`.
 
-Kafka задаёт порядок внутри partition, но не глобальный порядок между всеми partition.
+Kafka гарантирует порядок записей внутри одной партиции, но не задаёт глобальный порядок между разными партициями.
 
 ### 3.2. Consumer group
 
@@ -138,13 +140,13 @@ P2 -----------> Consumer C
 P3 -----------> Consumer A
 ```
 
-Максимальный полезный параллелизм одной consumer group ограничен числом partition:
+Максимальное число одновременно активных потребителей одной `consumer group` ограничено числом партиций:
 
 $$
-P_{consumer}\le P_{partition}.
+P_{active}\le P_{partition}.
 $$
 
-Если consumers больше, чем partition, часть consumers простаивает.
+Если экземпляров `consumer` больше, чем партиций, часть из них не получает назначений и простаивает.
 
 ### 3.3. Replication
 
@@ -156,13 +158,13 @@ Partition P0
 +-- Replica  Broker 3
 ```
 
-Producer/consumer работают с leader, replicas поддерживают копии. Реальная долговечность зависит от replication factor, ISR и producer acknowledgement policy.
+По умолчанию чтение и запись выполняются через лидера партиции, а реплики поддерживают согласованные копии. Реальная долговечность определяется `replication.factor`, составом ISR (`in-sync replicas`) и политикой подтверждений производителя (`acks`).
 
 ---
 
 ## 4. KRaft
 
-Современный Kafka использует KRaft (Kafka Raft metadata mode) вместо ZooKeeper для управления metadata quorum.
+Начиная с Apache Kafka 4.0 режим ZooKeeper удалён: Kafka 4.x работает в режиме KRaft, где метаданные кластера хранятся и реплицируются кворумом контроллеров.
 
 ```text
                        +-------------------+
@@ -183,19 +185,19 @@ Producer/consumer работают с leader, replicas поддерживают 
           +------------+  +------------+  +------------+
 ```
 
-Для переносимости $f$ одновременных отказов controller quorum:
+Минимальный нечётный кворум, способный сохранить большинство при $f$ одновременных отказах контроллеров:
 
 $$
 N_{controllers}=2f+1.
 $$
 
-Три controller позволяют пережить отказ одного controller при сохранении большинства.
+Три контроллера позволяют пережить отказ одного контроллера при сохранении большинства.
 
-В учебном single-node стенде roles могут объединяться; в production-критических deployment broker/controller roles рекомендуется разделять.
+В учебном одноузловом стенде роли `broker` и `controller` могут совмещаться. В производственных кластерах роли обычно разделяют, чтобы отказ или перегрузка брокера не влияли одновременно на кворум метаданных.
 
 ---
 
-## 5. Робототехнический streaming pipeline
+## 5. Потоковый конвейер робототехнической системы
 
 ```text
 +---------+       +---------+       +------------------+
@@ -235,8 +237,8 @@ $$
 Для сенсорного события:
 
 - `event_time` — момент физического измерения;
-- `ingestion_time` — момент поступления в stream engine;
-- `processing_time` — момент обработки operator.
+- `ingestion_time` — момент поступления события в движок потоковой обработки;
+- `processing_time` — момент, когда оператор фактически обрабатывает событие.
 
 Пример:
 
@@ -253,7 +255,7 @@ $$
 L=t_{processing}-t_{event}.
 $$
 
-Для воспроизводимой аналитики sensor data основной временной осью обычно выбирают `event_time`.
+Для воспроизводимой аналитики сенсорных данных основной временной осью обычно выбирают `event_time`, полученный как можно ближе к источнику измерения.
 
 ---
 
@@ -338,13 +340,13 @@ watermark ≈ 12:00:30
 - меньше задержка;
 - больше риск потерять late data.
 
-Watermark — не команда удаления Kafka log. Это механизм прогресса event time для stateful processing.
+`Watermark` не удаляет записи из Kafka. Это оценка прогресса времени событий, используемая потоковым движком для управления состоянием окон и обработки опоздавших данных.
 
 ---
 
 ## 9. Spark Structured Streaming
 
-Spark представляет stream как неограниченную таблицу.
+Spark Structured Streaming рассматривает входной поток как неограниченную таблицу, к которой применяется инкрементально исполняемый запрос.
 
 ```text
 new event
@@ -451,9 +453,9 @@ raw = (
 
 ---
 
-## 10. Stateful processing и checkpoint
+## 10. Обработка с состоянием и контрольные точки
 
-Оконный operator хранит state:
+Оконный оператор хранит состояние:
 
 ```text
 (robot-01, window 12:00:00-12:00:20)
@@ -462,11 +464,11 @@ sum_temp = ...
 max_temp = ...
 ```
 
-Система должна восстанавливать:
+После сбоя система должна согласованно восстановить:
 
-1. position/offset источника;
-2. operator state;
-3. согласованность sink.
+1. позицию чтения (`offset`) источника;
+2. состояние операторов;
+3. состояние или семантику записи в приёмник (`sink`).
 
 ```text
 Source offsets
@@ -481,7 +483,7 @@ Source offsets
                        +-------------+
 ```
 
-`Exactly-once` является end-to-end свойством только при совместимых source, state и sink semantics. Запись во внешнюю нетранзакционную систему может дублироваться при replay.
+`Exactly-once` нельзя приписывать одному оператору или одному фреймворку без оговорок. Контрольные точки обеспечивают согласованное восстановление состояния и позиции источника, но сквозная (`end-to-end`) семантика зависит также от `sink`. Если внешний приёмник не поддерживает транзакции или идемпотентную запись, повторное воспроизведение (`replay`) может создать дубликаты.
 
 Идемпотентный ключ:
 
@@ -493,7 +495,7 @@ PRIMARY KEY (robot_id, event_id)
 
 ---
 
-## 11. Apache Flink DataStream
+## 11. Apache Flink DataStream (Flink 2.3)
 
 ```text
 Source
@@ -522,7 +524,7 @@ wm = WatermarkStrategy.for_bounded_out_of_orderness(
 )
 ```
 
-Инварианты, общие для Spark/Flink:
+Ключевые понятия, общие для Spark Structured Streaming и Flink DataStream:
 
 ```text
 timestamp
@@ -542,9 +544,9 @@ sink semantics
 
 Replica может стать leader при корректной replication/ISR configuration.
 
-### Stream worker failure
+### Отказ потокового worker
 
-State восстанавливается из checkpoint; source чтение продолжается с согласованной позиции.
+Состояние восстанавливается из контрольной точки, а чтение источника продолжается с согласованной позиции. Для Flink checkpoint должен храниться в надёжном хранилище; по умолчанию checkpointing необходимо явно включить.
 
 ### Duplicate external effect
 
@@ -558,16 +560,16 @@ event E
 
 Решения:
 
-- idempotent sink;
-- transactional sink;
-- deterministic event ID;
-- upsert/merge.
+- идемпотентный `sink`;
+- транзакционный `sink`;
+- детерминированный идентификатор события;
+- `UPSERT` / `MERGE` вместо безусловного `INSERT`.
 
 ---
 
 ## 13. Teach: педагогический мост
 
-### Как объяснять stream
+### Как объяснять потоковую обработку
 
 Модель «турникет»:
 
@@ -579,21 +581,21 @@ event E
 система считает входы каждую минуту
 ```
 
-CSV — итоговая фотография; stream — расчёт «на ходу».
+CSV-файл можно представить как «фотографию» накопленных данных, а поток — как непрерывно поступающие события, которые приходится обрабатывать по мере появления.
 
 ### Event time
 
 > Фото сделано в 10:01, но отправлено в 10:05. Когда произошло событие?
 
-Так вводится `event_time` без Kafka terminology.
+Так понятие `event_time` вводится без преждевременной привязки к терминологии Kafka.
 
 ### Типичные ошибки
 
-1. «Kafka обрабатывает данные».
-2. «Offset — timestamp».
-3. «Watermark удаляет исходные события».
-4. «Window size равен trigger interval».
-5. «Exactly-once автоматически действует для любой БД».
+1. «Kafka сама выполняет аналитическую обработку данных».
+2. «`Offset` — это временная метка».
+3. «`Watermark` удаляет исходные события из Kafka».
+4. «Размер окна (`window size`) равен интервалу запуска (`trigger interval`)».
+5. «`Exactly-once` автоматически распространяется на любую внешнюю БД».
 
 ### Микрокейс НТО
 
@@ -625,23 +627,23 @@ $$
 
 ## 14. Контрольные вопросы
 
-1. Почему порядок Kafka ограничен partition?
-2. Как key=`robot_id` влияет на ordering, parallelism и skew?
-3. Почему event time важнее processing time для воспроизводимого sensor analytics?
-4. Что произойдёт со state при бесконечном потоке без watermark?
-5. Почему end-to-end exactly-once нельзя утверждать без анализа sink?
+1. Почему Kafka гарантирует порядок только внутри одной партиции?
+2. Как `key=robot_id` влияет на порядок, параллелизм и перекос нагрузки (`skew`)?
+3. Почему `event_time` важнее `processing_time` для воспроизводимой аналитики сенсорных данных?
+4. Что может произойти с состоянием окон при бесконечном потоке без корректной политики `watermark`?
+5. Почему сквозную семантику `exactly-once` нельзя утверждать без анализа внешнего `sink`?
 
 ---
 
 ## 15. Основные источники
 
 1. Apache Kafka. **KRaft**.  
-   https://kafka.apache.org/42/operations/kraft/
-2. Apache Spark. **Structured Streaming**.  
+   https://kafka.apache.org/43/operations/kraft/
+2. Apache Spark. **Structured Streaming Programming Guide**.  
    https://spark.apache.org/docs/latest/streaming/
-3. Apache Flink. **Streaming Analytics**.  
-   https://nightlies.apache.org/flink/flink-docs-stable/docs/learn-flink/streaming_analytics/
-4. Apache Flink. **Generating Watermarks**.  
-   https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/event-time/generating_watermarks/
-5. Apache Flink. **Windows**.  
-   https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream-v2/builtin-funcs/windows/
+3. Apache Flink 2.3. **Generating Watermarks**.  
+   https://nightlies.apache.org/flink/flink-docs-release-2.3/docs/dev/datastream/event-time/generating_watermarks/
+4. Apache Flink 2.3. **Checkpointing**.  
+   https://nightlies.apache.org/flink/flink-docs-release-2.3/docs/dev/datastream/fault-tolerance/checkpointing/
+5. Apache Flink 2.3. **Windows**.  
+   https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/windows/
