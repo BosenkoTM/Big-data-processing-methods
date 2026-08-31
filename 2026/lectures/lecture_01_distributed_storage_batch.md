@@ -5,17 +5,7 @@
 **Профиль:** «Информатика и дополнительное образование (робототехника)»  
 **Этапы пайплайна:** `Collect -> Store -> Process`
 
-$$
-\boxed{
-\text{Sense}\rightarrow
-\text{Collect}\rightarrow
-\text{Stream}\rightarrow
-\text{Store}\rightarrow
-\text{Process}\rightarrow
-\text{Learn}\rightarrow
-\text{Teach}
-}
-$$
+$$\boxed{\mathrm{Sense}\rightarrow\mathrm{Collect}\rightarrow\mathrm{Stream}\rightarrow\mathrm{Store}\rightarrow\mathrm{Process}\rightarrow\mathrm{Learn}\rightarrow\mathrm{Teach}}$$
 
 ## 1. Тема и план лекции
 
@@ -33,72 +23,43 @@ $$
 
 Пусть робот формирует $m$ сенсорных потоков. Для потока $j$ частота равна $f_j$, размер сообщения — $s_j$ байт. Объём за время $T$:
 
-$$
-V(T)=T\sum_{j=1}^{m}f_js_j.
-$$
+$$V(T)=T\sum_{j=1}^{m}f_js_j.$$
 
 Для $R$ одинаковых роботов:
 
-$$
-V_R(T)=R\,V(T).
-$$
+$$V_R(T)=R\,V(T).$$
 
 Пример: 20 роботов передают 200 IMU-сообщений/с по 128 байт:
 
-$$
-V(1\,day)
-=
-20\cdot200\cdot128\cdot86400
-\approx 44.2\cdot10^9\;bytes.
-$$
+$$V_{\mathrm{day}}=20\cdot200\cdot128\cdot86400\approx4.42\cdot10^{10}.$$
 
-Даже один лёгкий поток формирует десятки гигабайт в сутки; LiDAR и видео увеличивают объём на порядки.
+Получаем примерно **44,2 ГБ данных в сутки** без учёта служебных полей протокола, сериализации и резервных копий. Даже один сравнительно лёгкий сенсорный поток формирует значительный объём данных; LiDAR и видео увеличивают его на порядки.
 
 ### 2.1. Модель времени distributed job
 
 Для $N$ записей и $P$ исполнителей:
 
-$$
-T_{compute}\approx \frac{N}{P}c,
-$$
+$$T_{\mathrm{compute}}\approx\frac{N}{P}c,$$
 
-где $c$ — средняя стоимость обработки записи.
+где $c$ — средняя стоимость обработки одной записи.
 
-Полное время:
+Полное время выполнения распределённой задачи:
 
-$$
-T_{job}
-=
-T_{read}
-+
-T_{compute}
-+
-T_{shuffle}
-+
-T_{write}
-+
-T_{coord}.
-$$
+$$T_{\mathrm{job}}=T_{\mathrm{read}}+T_{\mathrm{compute}}+T_{\mathrm{shuffle}}+T_{\mathrm{write}}+T_{\mathrm{coord}}.$$
 
-При `groupBy`, `join`, `distinct`, `orderBy` часто доминирует $T_{shuffle}$.
+При `groupBy`, `join`, `distinct`, `orderBy` часто доминирует $T_{\mathrm{shuffle}}$.
 
 Ускорение:
 
-$$
-S(P)=\frac{T(1)}{T(P)}.
-$$
+$$S(P)=\frac{T(1)}{T(P)}.$$
 
 Эффективность:
 
-$$
-E(P)=\frac{S(P)}{P}.
-$$
+$$E(P)=\frac{S(P)}{P}.$$
 
 Закон Амдала (Amdahl's law):
 
-$$
-S(P)=\frac{1}{(1-\alpha)+\alpha/P},
-$$
+$$S(P)=\frac{1}{(1-\alpha)+\alpha/P},$$
 
 где $\alpha$ — доля распараллеливаемой части.
 
@@ -106,9 +67,7 @@ $$
 
 Энтропия Шеннона (Shannon entropy):
 
-$$
-H(X)=-\sum_i p_i\log_2p_i.
-$$
+$$H(X)=-\sum_i p_i\log_2p_i.$$
 
 Повторяющиеся `robot_id`, `sensor_type`, `state` имеют сравнительно низкую энтропию и хорошо кодируются dictionary encoding и RLE. Структура данных влияет не только на удобство SQL, но и на физический размер и I/O.
 
@@ -118,52 +77,30 @@ $$
 
 Google File System (GFS) сформулировала архитектуру хранения больших файлов на commodity hardware; HDFS развивает близкие идеи для Hadoop.
 
-```text
-                         metadata
-                    +----------------+
-                    | NameNode /     |
-                    | Master         |
-                    +-------+--------+
-                            ^
-                            | block map
-                            |
-+--------+      read/write  |       +-----------+
-| Client |------------------+------>| DataNode A|
-+--------+                         / +-----------+
-     |                            /
-     |                           / replica
-     |                          v
-     |                     +-----------+
-     +-------------------->| DataNode B|
-                           +-----------+
-                                 |
-                                 v
-                           +-----------+
-                           | DataNode C|
-                           +-----------+
+```mermaid
+flowchart LR
+    C[Client] -->|metadata request| N[NameNode / Master]
+    N -->|block locations| C
+    C -->|read / write block| A[DataNode A]
+    A -->|replica| B[DataNode B]
+    B -->|replica| D[DataNode C]
 ```
 
-Файл:
+Файл разбивается на блоки:
 
-$$
-F=B_1\cup B_2\cup\dots\cup B_k.
-$$
+$$F=B_1\cup B_2\cup\dots\cup B_k.$$
 
-При независимой вероятности отказа одной копии $p$ и числе реплик $r$ грубая оценка:
+При независимой вероятности отказа одной копии $p$ и числе реплик $r$ грубая оценка вероятности одновременной потери всех копий:
 
-$$
-P_{loss}\approx p^r.
-$$
+$$P_{\mathrm{loss}}\approx p^r.$$
 
-Это учебная модель: реальные отказы коррелированы, поэтому учитываются rack/zone failure domains.
+Это учебная модель: реальные отказы коррелированы, поэтому в реальных системах учитываются rack/zone failure domains.
 
 ### Data locality
 
-Передача объёма $D$ по сети с полезной пропускной способностью $B_{net}$:
+Передача объёма $D$ по сети с полезной пропускной способностью $B_{\mathrm{net}}$:
 
-$$
-T_{net}\approx\frac{D}{B_{net}}.
-$$
+$$T_{\mathrm{net}}\approx\frac{D}{B_{\mathrm{net}}}.$$
 
 Отсюда принцип: **Move computation to data, not data to computation.**
 
@@ -173,56 +110,35 @@ $$
 
 ## 4. MapReduce
 
-$$
-map(k_1,v_1)\rightarrow[(k_2,v_2)],
-$$
+Формальная модель:
 
-$$
-reduce(k_2,[v_2])\rightarrow[v_3].
-$$
+$$\mathrm{map}(k_1,v_1)\rightarrow[(k_2,v_2)],$$
 
-Пример температуры двигателя:
+$$\mathrm{reduce}(k_2,[v_2])\rightarrow[v_3].$$
 
-```text
-Input:
-(robot-01, 48.2)
-(robot-02, 47.9)
-(robot-01, 52.1)
+Пример поиска максимальной температуры двигателя:
 
-Map:
-robot-01 -> 48.2
-robot-02 -> 47.9
-robot-01 -> 52.1
-
-Shuffle:
-robot-01 -> [48.2, 52.1]
-robot-02 -> [47.9]
-
-Reduce:
-robot-01 -> 52.1
-robot-02 -> 47.9
+```mermaid
+flowchart LR
+    I["Input<br/>(robot-01, 48.2)<br/>(robot-02, 47.9)<br/>(robot-01, 52.1)"] --> M[Map]
+    M --> S["Shuffle by robot_id"]
+    S --> R["Reduce: max"]
+    R --> O["Output<br/>robot-01 -> 52.1<br/>robot-02 -> 47.9"]
 ```
 
 Если функция ассоциативна и коммутативна, возможна локальная агрегация:
 
-$$
-\max(\max(A),\max(B))=\max(A\cup B).
-$$
+$$\max(\max(A),\max(B))=\max(A\cup B).$$
 
-Главный переносимый принцип:
+Главный переносимый принцип MapReduce:
 
-```text
-input
-  |
-partition
-  |
-local transform
-  |
-shuffle by key
-  |
-aggregate
-  |
-output
+```mermaid
+flowchart LR
+    A[Input] --> B[Partition]
+    B --> C[Local transform]
+    C --> D[Shuffle by key]
+    D --> E[Aggregate]
+    E --> F[Output]
 ```
 
 Он повторяется в Spark при `groupBy`, `join`, `repartition`.
@@ -233,58 +149,59 @@ output
 
 ### 5.1. Row vs column storage
 
-Строково:
+Строковая и колоночная организации данных отличаются физическим размещением значений:
 
-```text
-robot-01 | imu | 48.1 | 12.1
-robot-02 | imu | 47.4 | 12.0
+```mermaid
+flowchart TB
+    subgraph R[Row-oriented storage]
+        R1["record 1: robot-01 | imu | 48.1 | 12.1"]
+        R2["record 2: robot-02 | imu | 47.4 | 12.0"]
+    end
+
+    subgraph C[Column-oriented storage]
+        C1["robot_id: robot-01, robot-02, ..."]
+        C2["sensor: imu, imu, ..."]
+        C3["temp: 48.1, 47.4, ..."]
+        C4["battery: 12.1, 12.0, ..."]
+    end
 ```
 
-Колоночно:
-
-```text
-robot_id: robot-01 robot-02 ...
-sensor:   imu      imu      ...
-temp:     48.1     47.4     ...
-battery:  12.1     12.0     ...
-```
-
-Если запрос использует только `robot_id` и `temp`, колоночный формат сокращает чтение.
+Если запрос использует только `robot_id` и `temp`, колоночный формат сокращает объём чтения.
 
 ### 5.2. Parquet
 
-```text
-Parquet file
-|
-+-- Row Group
-|   +-- Column Chunk: robot_id
-|   |   +-- Dictionary Page (optional)
-|   |   +-- Data Pages
-|   +-- Column Chunk: motor_temp
-|
-+-- Row Group
+Упрощённая физическая организация Apache Parquet:
+
+```mermaid
+flowchart TD
+    P[Parquet file] --> RG1[Row Group 1]
+    P --> RG2[Row Group 2]
+    RG1 --> C1[Column Chunk: robot_id]
+    RG1 --> C2[Column Chunk: motor_temp]
+    C1 --> DP[Dictionary Page - optional]
+    C1 --> PG1[Data Pages]
+    C2 --> PG2[Data Pages]
 ```
 
 Используются dictionary encoding, RLE/bit packing, statistics, page/column indexes и codecs `Snappy`, `ZSTD`.
 
-Коэффициент уменьшения:
+Коэффициент уменьшения объёма:
 
-$$
-C=\frac{S_{raw}}{S_{columnar}}.
-$$
+$$C=\frac{S_{\mathrm{raw}}}{S_{\mathrm{columnar}}}.$$
 
 ### 5.3. ORC
 
-```text
-ORC file
-|
-+-- Stripe
-|   +-- index streams
-|   +-- data streams by column
-|   +-- stripe footer
-|
-+-- file footer
-+-- postscript
+Упрощённая структура ORC:
+
+```mermaid
+flowchart TD
+    O[ORC file] --> S1[Stripe 1]
+    O --> S2[Stripe 2]
+    O --> FF[File Footer]
+    O --> PS[Postscript]
+    S1 --> I[Index streams]
+    S1 --> D[Data streams by column]
+    S1 --> SF[Stripe footer]
 ```
 
 ORC использует type-aware encoding, statistics и индексы по row groups.
@@ -303,7 +220,7 @@ Projection исключает ненужные колонки. Если metadata
 
 ## 6. TF-IDF и BM25 для текстовых логов
 
-Диагностические сообщения:
+Диагностические сообщения робототехнической системы могут выглядеть так:
 
 ```text
 motor controller timeout
@@ -314,33 +231,23 @@ battery voltage low
 
 ### TF-IDF
 
-$$
-TF(t,d)=\frac{f_{t,d}}{|d|},
-$$
+Частота терма:
 
-$$
-IDF(t)=\log\frac{N}{df(t)},
-$$
+$$\mathrm{TF}(t,d)=\frac{f_{t,d}}{|d|}.$$
 
-$$
-TFIDF(t,d)=TF(t,d)\cdot IDF(t).
-$$
+Обратная документная частота:
+
+$$\mathrm{IDF}(t)=\log\frac{N}{\mathrm{df}(t)}.$$
+
+Итоговый вес:
+
+$$\mathrm{TFIDF}(t,d)=\mathrm{TF}(t,d)\cdot\mathrm{IDF}(t).$$
 
 ### BM25
 
-$$
-BM25(d,q)
-=
-\sum_{t\in q}
-IDF(t)
-\frac{
-f(t,d)(k_1+1)
-}{
-f(t,d)+k_1\left(1-b+b\frac{|d|}{avgdl}\right)
-}.
-$$
+$$\mathrm{BM25}(d,q)=\sum_{t\in q}\mathrm{IDF}(t)\cdot\frac{f(t,d)(k_1+1)}{f(t,d)+k_1\left(1-b+b\frac{|d|}{\mathrm{avgdl}}\right)}.$$
 
-$k_1$ управляет насыщением term frequency, $b$ — нормализацией длины. Для миллионов логов статистики $df(t)$ и inverted index естественно требуют распределённой обработки.
+Параметр $k_1$ управляет насыщением term frequency, $b$ — нормализацией по длине документа. Для миллионов логов статистики $\mathrm{df}(t)$ и inverted index естественно требуют распределённой обработки.
 
 ---
 
@@ -348,17 +255,11 @@ $k_1$ управляет насыщением term frequency, $b$ — норма
 
 RDD (Resilient Distributed Dataset) — неизменяемая распределённая коллекция partition.
 
-```text
-RDD A
- | map
- v
-RDD B
- | filter
- v
-RDD C
- | groupByKey
- v
-RDD D
+```mermaid
+flowchart TD
+    A[RDD A] -->|map| B[RDD B]
+    B -->|filter| C[RDD C]
+    C -->|groupByKey| D[RDD D]
 ```
 
 Lineage позволяет восстанавливать утраченную partition повторным вычислением.
@@ -366,21 +267,16 @@ Lineage позволяет восстанавливать утраченную p
 **Narrow dependencies:** `map`, `filter`, `select`.  
 **Wide dependencies:** `groupBy`, `join`, `distinct`, `orderBy`, `repartition`.
 
-```text
-Input
- |
-Filter ----- narrow
- |
-Select ----- narrow
- |
-+----------------------+
-| Shuffle by robot_id  |
-+----------------------+
- |
-Aggregate
- |
-Output
+```mermaid
+flowchart TD
+    I[Input] -->|narrow| F[Filter]
+    F -->|narrow| S[Select]
+    S --> X[Shuffle by robot_id]
+    X --> A[Aggregate]
+    A --> O[Output]
 ```
+
+Wide dependency обычно создаёт shuffle и границу stage.
 
 ---
 
@@ -437,20 +333,16 @@ summary.explain(mode="formatted")
 
 ## 9. Spark SQL и Catalyst Optimizer
 
-```text
-SQL / DataFrame API
-        |
-Parsed Logical Plan
-        |
-Analysis: resolve names/types
-        |
-Optimized Logical Plan
-        |
-Physical Planning
-        |
-Executed Plan
-        |
-Adaptive Query Execution
+Обобщённая последовательность обработки SQL/DataFrame-запроса:
+
+```mermaid
+flowchart TD
+    A[SQL / DataFrame API] --> B[Parsed Logical Plan]
+    B --> C[Analysis: resolve names and types]
+    C --> D[Optimized Logical Plan]
+    D --> E[Physical Planning]
+    E --> F[Executed Plan]
+    F --> G[Adaptive Query Execution]
 ```
 
 Типичные оптимизации: constant folding, predicate pushdown, column pruning, выбор join strategy, broadcast, coalescing post-shuffle partitions и skew optimization через AQE.
@@ -496,13 +388,13 @@ result.explain(mode="formatted")
 
 ### Микрокейс для 9–11 класса / НТО
 
-Дана телеметрия:
+Дана телеметрия со следующими полями:
 
 ```text
 timestamp, robot_id, motor_temp, battery_v, velocity, message
 ```
 
-Нужно:
+Необходимо:
 
 1. найти максимум температуры каждого робота;
 2. найти пять роботов с наибольшим падением батареи;
@@ -534,5 +426,7 @@ timestamp, robot_id, motor_temp, battery_v, velocity, message
    https://spark.apache.org/docs/latest/sql-programming-guide
 4. Apache Spark. **Performance Tuning / Adaptive Query Execution**.  
    https://spark.apache.org/docs/latest/sql-performance-tuning
-5. Apache Parquet. https://parquet.apache.org/docs/
-6. Apache ORC. https://orc.apache.org/docs/
+5. Apache Parquet.  
+   https://parquet.apache.org/docs/
+6. Apache ORC.  
+   https://orc.apache.org/docs/
