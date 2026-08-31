@@ -5,29 +5,32 @@
 **Профиль:** «Информатика и дополнительное образование (робототехника)»  
 **Этапы пайплайна:** `Stream -> Process`
 
-$$
-\boxed{
-\text{Sense}\rightarrow
-\text{Collect}\rightarrow
-\text{Stream}\rightarrow
-\text{Store}\rightarrow
-\text{Process}\rightarrow
-\text{Learn}\rightarrow
-\text{Teach}
-}
-$$
+```mermaid
+flowchart LR
+    S0["Sense"]
+    S1["Collect"]
+    S2["Stream"]
+    S3["Store"]
+    S4["Process"]
+    S5["Learn"]
+    S6["Teach"]
+    S0 --> S1
+    S1 --> S2
+    S2 --> S3
+    S3 --> S4
+    S4 --> S5
+    S5 --> S6
+```
 
 ## 1. Тема и план лекции
 
-1. Модель неограниченного потока: пропускная способность (`throughput`), задержка (`latency`), очередь (`backlog`) и обратное давление (`backpressure`).
-2. Apache Kafka: `topic`, `partition`, `offset`, репликация, `consumer group`; кворум метаданных KRaft.
-3. Spark Structured Streaming: неограниченная таблица, микропакетная обработка (`micro-batch`), состояние и контрольные точки (`checkpoint`).
-4. Время события (`Event Time`), время обработки (`Processing Time`), окна и водяные знаки (`watermark`).
-5. Apache Flink DataStream: обработка с состоянием и отказоустойчивость.
+1. Модель неограниченного потока: throughput, latency, backlog, backpressure.
+2. Apache Kafka: topic, partition, offset, replication, consumer group; KRaft metadata quorum.
+3. Spark Structured Streaming: unbounded table, micro-batch, state, checkpoint.
+4. Event Time, Processing Time, tumbling/sliding/session windows и watermarking.
+5. Apache Flink DataStream и fault tolerance stateful stream processing.
 
-После лекции студент должен уметь проектировать поток обработки телеметрии нескольких роботов, выбирать ключ партиционирования Kafka, рассчитывать параметры окна, объяснять роль `watermark` и восстанавливать состояние потокового приложения после сбоя.
-
-> **Технологическая база на 31.08.2026:** Apache Kafka 4.3.1 (только KRaft), Apache Spark 4.2.0, Apache Flink 2.3. Для лабораторных рекомендуется фиксировать версии в `requirements.txt`/контейнере, а не полагаться на `latest`.
+После лекции студент должен уметь проектировать поток обработки телеметрии нескольких роботов, выбирать ключ партиционирования Kafka, рассчитывать параметры окна и объяснять восстановление state после сбоя.
 
 ---
 
@@ -37,85 +40,56 @@ $$
 
 Для устойчивой системы:
 
-$$
-\lambda<\mu.
-$$
+$$\lambda<\mu.$$
 
 Коэффициент загрузки:
 
-$$
-\rho=\frac{\lambda}{\mu}.
-$$
+$$\rho=\frac{\lambda}{\mu}.$$
 
-При $\rho\rightarrow1$ даже кратковременный всплеск (`burst`) создаёт очередь и увеличивает задержку. Условие $\lambda<\mu$ описывает упрощённую стационарную модель; в реальной системе требуется запас производительности из-за неравномерности потока, перекоса ключей (`skew`) и пауз на обслуживание.
+При $\rho\rightarrow1$ кратковременный burst создаёт backlog и увеличивает latency.
 
-### 2.1. Пропускная способность (Throughput)
+### 2.1. Throughput
 
-$$
-Throughput=\frac{N_{events}}{T}.
-$$
+$$\mathrm{Throughput}=\frac{N_{\mathrm{events}}}{T}.$$
 
-### 2.2. Сквозная задержка (End-to-end latency)
+### 2.2. End-to-end latency
 
-$$
-L=t_{result}-t_{event}.
-$$
+$$L=t_{\mathrm{result}}-t_{\mathrm{event}}.$$
 
 Декомпозиция:
 
-$$
-L=
-L_{network}+
-L_{queue}+
-L_{compute}+
-L_{sink}.
-$$
+$$L=L_{\mathrm{network}}+L_{\mathrm{queue}}+L_{\mathrm{compute}}+L_{\mathrm{sink}}.$$
 
 ### 2.3. Закон Литтла
 
 Для стабильной системы:
 
-$$
-N=\lambda W,
-$$
+$$N=\lambda W.$$
 
-где $N$ — среднее число событий внутри конвейера, $W$ — среднее время пребывания события в системе.
+где $N$ — среднее число событий внутри pipeline, $W$ — среднее время пребывания.
 
 Если одновременно находятся 20 000 событий при 5 000 events/s:
 
-$$
-W=\frac{20000}{5000}=4\;s.
-$$
+$$W=\frac{20000}{5000}=4\ \mathrm{s}.$$
 
 ---
 
 ## 3. Apache Kafka
 
-Kafka хранит события в виде дописываемого журнала (`append-only log`) внутри каждой партиции (`partition`).
+Kafka хранит события как append-only log внутри partition.
 
-```text
-Topic: robot.telemetry
-
-Partition 0:
-offset 0 -> robot-00
-offset 1 -> robot-04
-offset 2 -> robot-00
-
-Partition 1:
-offset 0 -> robot-01
-offset 1 -> robot-05
-
-Partition 2:
-offset 0 -> robot-02
+```mermaid
+flowchart LR
+    T["Topic: robot.telemetry"] --> P0["Partition 0<br/>offset 0: robot-00<br/>offset 1: robot-04<br/>offset 2: robot-00"]
+    T --> P1["Partition 1<br/>offset 0: robot-01<br/>offset 1: robot-05"]
+    T --> P2["Partition 2<br/>offset 0: robot-02"]
 ```
 
 Идентификатор позиции:
 
-$$
-(topic,\ partition,\ offset).
-$$
+$$(\mathrm{topic},\mathrm{partition},\mathrm{offset}).$$
 
-`Offset` — позиция записи внутри конкретной партиции, а не временная метка (`timestamp`).
+Offset — позиция внутри partition, а не timestamp.
 
 ### 3.1. Key и ordering
 
@@ -125,109 +99,83 @@ $$
 key = robot_id
 ```
 
-события одного робота маршрутизируются в одну и ту же партицию при неизменных числе партиций и алгоритме партиционирования. Изменение числа партиций может изменить соответствие `key -> partition`.
+события одного робота маршрутизируются детерминированно в одну partition при стабильной схеме partitioning.
 
-Kafka гарантирует порядок записей внутри одной партиции, но не задаёт глобальный порядок между разными партициями.
+Kafka задаёт порядок внутри partition, но не глобальный порядок между всеми partition.
 
 ### 3.2. Consumer group
 
-```text
-Partitions       Consumer group
-
-P0 -----------> Consumer A
-P1 -----------> Consumer B
-P2 -----------> Consumer C
-P3 -----------> Consumer A
+```mermaid
+flowchart LR
+    P0["Partition P0"] --> A["Consumer A"]
+    P1["Partition P1"] --> B["Consumer B"]
+    P2["Partition P2"] --> C["Consumer C"]
+    P3["Partition P3"] --> A
 ```
 
-Максимальное число одновременно активных потребителей одной `consumer group` ограничено числом партиций:
+Максимальный полезный параллелизм одной consumer group ограничен числом partition:
 
-$$
-P_{active}\le P_{partition}.
-$$
+$$P_{\mathrm{consumer}}\le P_{\mathrm{partition}}.$$
 
-Если экземпляров `consumer` больше, чем партиций, часть из них не получает назначений и простаивает.
+Если consumers больше, чем partition, часть consumers простаивает.
 
 ### 3.3. Replication
 
-```text
-Partition P0
-|
-+-- Leader   Broker 1
-+-- Replica  Broker 2
-+-- Replica  Broker 3
+```mermaid
+flowchart TD
+    P["Partition P0"]
+    P --> L["Leader — Broker 1"]
+    P --> R1["Replica — Broker 2"]
+    P --> R2["Replica — Broker 3"]
 ```
 
-По умолчанию чтение и запись выполняются через лидера партиции, а реплики поддерживают согласованные копии. Реальная долговечность определяется `replication.factor`, составом ISR (`in-sync replicas`) и политикой подтверждений производителя (`acks`).
+Producer/consumer работают с leader, replicas поддерживают копии. Реальная долговечность зависит от replication factor, ISR и producer acknowledgement policy.
 
 ---
 
 ## 4. KRaft
 
-Начиная с Apache Kafka 4.0 режим ZooKeeper удалён: Kafka 4.x работает в режиме KRaft, где метаданные кластера хранятся и реплицируются кворумом контроллеров.
+Современный Kafka использует KRaft (Kafka Raft metadata mode) вместо ZooKeeper для управления metadata quorum.
 
-```text
-                       +-------------------+
-                       | Active Controller |
-                       +---------+---------+
-                                 |
-                       replicated metadata
-                 +---------------+---------------+
-                 |               |               |
-                 v               v               v
-          +------------+  +------------+  +------------+
-          | Controller |  | Controller |  | Controller |
-          | voter      |  | voter      |  | voter      |
-          +------------+  +------------+  +------------+
+```mermaid
+flowchart TB
+    AC["Active Controller"]
+    C1["Controller voter 1"]
+    C2["Controller voter 2"]
+    C3["Controller voter 3"]
+    B1["Broker 1"]
+    B2["Broker 2"]
+    B3["Broker 3"]
 
-          +------------+  +------------+  +------------+
-          | Broker 1   |  | Broker 2   |  | Broker 3   |
-          +------------+  +------------+  +------------+
+    AC -. replicated metadata .-> C1
+    AC -. replicated metadata .-> C2
+    AC -. replicated metadata .-> C3
+    C1 -. metadata .-> B1
+    C2 -. metadata .-> B2
+    C3 -. metadata .-> B3
 ```
 
-Минимальный нечётный кворум, способный сохранить большинство при $f$ одновременных отказах контроллеров:
+Для переносимости $f$ одновременных отказов controller quorum:
 
-$$
-N_{controllers}=2f+1.
-$$
+$$N_{\mathrm{controllers}}=2f+1.$$
 
-Три контроллера позволяют пережить отказ одного контроллера при сохранении большинства.
+Три controller позволяют пережить отказ одного controller при сохранении большинства.
 
-В учебном одноузловом стенде роли `broker` и `controller` могут совмещаться. В производственных кластерах роли обычно разделяют, чтобы отказ или перегрузка брокера не влияли одновременно на кворум метаданных.
+В учебном single-node стенде roles могут объединяться; в production-критических deployment broker/controller roles рекомендуется разделять.
 
 ---
 
-## 5. Потоковый конвейер робототехнической системы
+## 5. Робототехнический streaming pipeline
 
-```text
-+---------+       +---------+       +------------------+
-| IMU     |       | LiDAR   |       | Motor controller |
-+----+----+       +----+----+       +---------+--------+
-     |                 |                      |
-     +-----------------+----------------------+
-                       |
-                       v
-                +--------------+
-                | Edge Gateway |
-                | ROS 2/Python |
-                +------+-------+
-                       |
-                       v
-                +--------------+
-                | Kafka topic  |
-                | telemetry    |
-                +------+-------+
-                       |
-             +---------+----------+
-             |                    |
-             v                    v
-   +-------------------+   +------------------+
-   | Spark Structured  |   | archival sink    |
-   | Streaming / Flink |   | Parquet/Object   |
-   +---------+---------+   +------------------+
-             |
-             v
-        TSDB / alerts
+```mermaid
+flowchart LR
+    IMU["IMU"] --> EDGE["Edge Gateway<br/>ROS 2 / Python"]
+    LIDAR["LiDAR"] --> EDGE
+    MOTOR["Motor controller"] --> EDGE
+    EDGE --> K["Kafka topic<br/>robot.telemetry"]
+    K --> SS["Spark Structured Streaming / Flink"]
+    K --> ARCH["Archive<br/>Parquet / Object Storage"]
+    SS --> TSDB["Time-Series DB / alerts"]
 ```
 
 ---
@@ -237,8 +185,8 @@ $$
 Для сенсорного события:
 
 - `event_time` — момент физического измерения;
-- `ingestion_time` — момент поступления события в движок потоковой обработки;
-- `processing_time` — момент, когда оператор фактически обрабатывает событие.
+- `ingestion_time` — момент поступления в stream engine;
+- `processing_time` — момент обработки operator.
 
 Пример:
 
@@ -251,11 +199,9 @@ $$
 
 Задержка:
 
-$$
-L=t_{processing}-t_{event}.
-$$
+$$L=t_{\mathrm{processing}}-t_{\mathrm{event}}.$$
 
-Для воспроизводимой аналитики сенсорных данных основной временной осью обычно выбирают `event_time`, полученный как можно ближе к источнику измерения.
+Для воспроизводимой аналитики sensor data основной временной осью обычно выбирают `event_time`.
 
 ---
 
@@ -265,12 +211,11 @@ $$
 
 Для размера $W$:
 
-$$
-Window_k=[kW,(k+1)W).
-$$
+$$\mathrm{Window}_k=[kW,(k+1)W).$$
 
-```text
-|------ W0 ------|------ W1 ------|------ W2 ------|
+```mermaid
+flowchart LR
+    W0["W0: [0, W)"] --> W1["W1: [W, 2W)"] --> W2["W2: [2W, 3W)"]
 ```
 
 Окна не перекрываются.
@@ -279,21 +224,20 @@ $$
 
 Размер $W$, шаг $S$:
 
-$$
-Window_k=[kS,kS+W).
-$$
+$$\mathrm{Window}_k=[kS,kS+W).$$
 
-```text
-|---------- W0 ----------|
-      |---------- W1 ----------|
-            |---------- W2 ----------|
+```mermaid
+flowchart LR
+    W0["W0: [0, 20)"]
+    W1["W1: [5, 25)"]
+    W2["W2: [10, 30)"]
+    W0 -. overlaps .- W1
+    W1 -. overlaps .- W2
 ```
 
 При $S<W$ запись участвует приблизительно в
 
-$$
-M\approx\left\lceil\frac{W}{S}\right\rceil
-$$
+$$M\approx\left\lceil\frac{W}{S}\right\rceil$$
 
 окнах.
 
@@ -301,10 +245,12 @@ $$
 
 События объединяются, пока gap между ними меньше $G$:
 
-```text
-x x x      x x                 x x x
-<----->    <->                 <----->
-session 1  session 2           session 3
+```mermaid
+flowchart LR
+    E1["x x x"] -->|gap > G| E2["x x"] -->|gap > G| E3["x x x"]
+    E1 --- S1["Session 1"]
+    E2 --- S2["Session 2"]
+    E3 --- S3["Session 3"]
 ```
 
 Подходит для эпизодов управления, пользовательских действий и серий команд робота.
@@ -315,9 +261,7 @@ session 1  session 2           session 3
 
 Для bounded out-of-orderness упрощённая модель:
 
-$$
-WM=\max(t_{event\ observed})-\Delta,
-$$
+$$\mathrm{WM}=\max(t_{\mathrm{event}})-\Delta.$$
 
 где $\Delta$ — допустимое запаздывание.
 
@@ -340,25 +284,19 @@ watermark ≈ 12:00:30
 - меньше задержка;
 - больше риск потерять late data.
 
-`Watermark` не удаляет записи из Kafka. Это оценка прогресса времени событий, используемая потоковым движком для управления состоянием окон и обработки опоздавших данных.
+Watermark — не команда удаления Kafka log. Это механизм прогресса event time для stateful processing.
 
 ---
 
 ## 9. Spark Structured Streaming
 
-Spark Structured Streaming рассматривает входной поток как неограниченную таблицу, к которой применяется инкрементально исполняемый запрос.
+Spark представляет stream как неограниченную таблицу.
 
-```text
-new event
-    |
-    v
-+-------------------+
-| Unbounded table   |
-+-------------------+
-    |
-SQL/DataFrame query
-    |
-incremental result
+```mermaid
+flowchart LR
+    E["New event"] --> U["Unbounded input table"]
+    U --> Q["SQL / DataFrame query"]
+    Q --> R["Incrementally updated result"]
 ```
 
 ### Colab-safe пример
@@ -453,9 +391,9 @@ raw = (
 
 ---
 
-## 10. Обработка с состоянием и контрольные точки
+## 10. Stateful processing и checkpoint
 
-Оконный оператор хранит состояние:
+Оконный operator хранит state:
 
 ```text
 (robot-01, window 12:00:00-12:00:20)
@@ -464,26 +402,22 @@ sum_temp = ...
 max_temp = ...
 ```
 
-После сбоя система должна согласованно восстановить:
+Система должна восстанавливать:
 
-1. позицию чтения (`offset`) источника;
-2. состояние операторов;
-3. состояние или семантику записи в приёмник (`sink`).
+1. position/offset источника;
+2. operator state;
+3. согласованность sink.
 
-```text
-Source offsets
-      |
-      v
-+-------------+
-| Operators   |---- state ----+
-+-------------+               |
-      |                       v
-      |                +-------------+
-      +--------------->| Checkpoint  |
-                       +-------------+
+```mermaid
+flowchart LR
+    SRC["Source offsets"] --> OP["Stateful operators"]
+    OP --> SINK["Sink"]
+    OP --> CP["Checkpoint storage"]
+    CP -. recovery .-> OP
+    CP -. source position .-> SRC
 ```
 
-`Exactly-once` нельзя приписывать одному оператору или одному фреймворку без оговорок. Контрольные точки обеспечивают согласованное восстановление состояния и позиции источника, но сквозная (`end-to-end`) семантика зависит также от `sink`. Если внешний приёмник не поддерживает транзакции или идемпотентную запись, повторное воспроизведение (`replay`) может создать дубликаты.
+`Exactly-once` является end-to-end свойством только при совместимых source, state и sink semantics. Запись во внешнюю нетранзакционную систему может дублироваться при replay.
 
 Идемпотентный ключ:
 
@@ -495,22 +429,16 @@ PRIMARY KEY (robot_id, event_id)
 
 ---
 
-## 11. Apache Flink DataStream (Flink 2.3)
+## 11. Apache Flink DataStream
 
-```text
-Source
-  |
-map/filter
-  |
-assign timestamps + watermarks
-  |
-keyBy(robot_id)
-  |
-window
-  |
-aggregate/process
-  |
-Sink
+```mermaid
+flowchart TD
+    SRC["Source"] --> MF["map / filter"]
+    MF --> WM["Assign timestamps<br/>+ watermarks"]
+    WM --> KB["keyBy(robot_id)"]
+    KB --> WIN["Window"]
+    WIN --> AGG["aggregate / process"]
+    AGG --> SINK["Sink"]
 ```
 
 ### PyFlink: bounded out-of-orderness
@@ -524,7 +452,7 @@ wm = WatermarkStrategy.for_bounded_out_of_orderness(
 )
 ```
 
-Ключевые понятия, общие для Spark Structured Streaming и Flink DataStream:
+Инварианты, общие для Spark/Flink:
 
 ```text
 timestamp
@@ -544,58 +472,58 @@ sink semantics
 
 Replica может стать leader при корректной replication/ISR configuration.
 
-### Отказ потокового worker
+### Stream worker failure
 
-Состояние восстанавливается из контрольной точки, а чтение источника продолжается с согласованной позиции. Для Flink checkpoint должен храниться в надёжном хранилище; по умолчанию checkpointing необходимо явно включить.
+State восстанавливается из checkpoint; source чтение продолжается с согласованной позиции.
 
 ### Duplicate external effect
 
-```text
-event E
- -> INSERT
- -> worker crash
- -> replay E
- -> duplicate INSERT
+```mermaid
+sequenceDiagram
+    participant S as Stream engine
+    participant D as External DB
+    S->>D: INSERT event E
+    Note over S: worker crashes before progress is committed
+    S->>D: replay event E
+    Note over D: duplicate effect without idempotency
 ```
 
 Решения:
 
-- идемпотентный `sink`;
-- транзакционный `sink`;
-- детерминированный идентификатор события;
-- `UPSERT` / `MERGE` вместо безусловного `INSERT`.
+- idempotent sink;
+- transactional sink;
+- deterministic event ID;
+- upsert/merge.
 
 ---
 
 ## 13. Teach: педагогический мост
 
-### Как объяснять потоковую обработку
+### Как объяснять stream
 
 Модель «турникет»:
 
-```text
-ученики входят
-     |
-события появляются непрерывно
-     |
-система считает входы каждую минуту
+```mermaid
+flowchart TD
+    A["Ученики входят"] --> B["События появляются непрерывно"]
+    B --> C["Система считает входы<br/>за каждую минуту"]
 ```
 
-CSV-файл можно представить как «фотографию» накопленных данных, а поток — как непрерывно поступающие события, которые приходится обрабатывать по мере появления.
+CSV — итоговая фотография; stream — расчёт «на ходу».
 
 ### Event time
 
 > Фото сделано в 10:01, но отправлено в 10:05. Когда произошло событие?
 
-Так понятие `event_time` вводится без преждевременной привязки к терминологии Kafka.
+Так вводится `event_time` без Kafka terminology.
 
 ### Типичные ошибки
 
-1. «Kafka сама выполняет аналитическую обработку данных».
-2. «`Offset` — это временная метка».
-3. «`Watermark` удаляет исходные события из Kafka».
-4. «Размер окна (`window size`) равен интервалу запуска (`trigger interval`)».
-5. «`Exactly-once` автоматически распространяется на любую внешнюю БД».
+1. «Kafka обрабатывает данные».
+2. «Offset — timestamp».
+3. «Watermark удаляет исходные события».
+4. «Window size равен trigger interval».
+5. «Exactly-once автоматически действует для любой БД».
 
 ### Микрокейс НТО
 
@@ -609,15 +537,11 @@ timestamp, robot_id, motor_temp
 
 При:
 
-$$
-W=20,\quad S=5
-$$
+$$W=20,\quad S=5$$
 
 одна запись участвует примерно в
 
-$$
-\frac{20}{5}=4
-$$
+$$\frac{20}{5}=4$$
 
 окнах.
 
@@ -627,23 +551,23 @@ $$
 
 ## 14. Контрольные вопросы
 
-1. Почему Kafka гарантирует порядок только внутри одной партиции?
-2. Как `key=robot_id` влияет на порядок, параллелизм и перекос нагрузки (`skew`)?
-3. Почему `event_time` важнее `processing_time` для воспроизводимой аналитики сенсорных данных?
-4. Что может произойти с состоянием окон при бесконечном потоке без корректной политики `watermark`?
-5. Почему сквозную семантику `exactly-once` нельзя утверждать без анализа внешнего `sink`?
+1. Почему порядок Kafka ограничен partition?
+2. Как key=`robot_id` влияет на ordering, parallelism и skew?
+3. Почему event time важнее processing time для воспроизводимого sensor analytics?
+4. Что произойдёт со state при бесконечном потоке без watermark?
+5. Почему end-to-end exactly-once нельзя утверждать без анализа sink?
 
 ---
 
 ## 15. Основные источники
 
 1. Apache Kafka. **KRaft**.  
-   https://kafka.apache.org/43/operations/kraft/
-2. Apache Spark. **Structured Streaming Programming Guide**.  
+   https://kafka.apache.org/42/operations/kraft/
+2. Apache Spark. **Structured Streaming**.  
    https://spark.apache.org/docs/latest/streaming/
-3. Apache Flink 2.3. **Generating Watermarks**.  
-   https://nightlies.apache.org/flink/flink-docs-release-2.3/docs/dev/datastream/event-time/generating_watermarks/
-4. Apache Flink 2.3. **Checkpointing**.  
-   https://nightlies.apache.org/flink/flink-docs-release-2.3/docs/dev/datastream/fault-tolerance/checkpointing/
-5. Apache Flink 2.3. **Windows**.  
-   https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/operators/windows/
+3. Apache Flink. **Streaming Analytics**.  
+   https://nightlies.apache.org/flink/flink-docs-stable/docs/learn-flink/streaming_analytics/
+4. Apache Flink. **Generating Watermarks**.  
+   https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream/event-time/generating_watermarks/
+5. Apache Flink. **Windows**.  
+   https://nightlies.apache.org/flink/flink-docs-stable/docs/dev/datastream-v2/builtin-funcs/windows/
