@@ -16,18 +16,16 @@ RDD является распределённой неизменяемой ко�
 
 MapReduce-представление агрегации:
 
-$$
-\operatorname{map}(k_1,v_1)\rightarrow[(k_2,v_2)],
-$$
+`map`:
 
 $$
-\operatorname{reduce}(k_2,[v_2])\rightarrow v_3.
+(k_1, v_1) \rightarrow [(k_2, v_2)]
 $$
 
-Для оценки вибрации/ускорения используется RMS:
+`reduce`:
 
 $$
-x_{RMS}=\sqrt{\frac{1}{N}\sum_{i=1}^N x_i^2}.
+(k_2, [v_2]) \rightarrow v_3
 $$
 
 ### 2. Исходный код (Google Colab)
