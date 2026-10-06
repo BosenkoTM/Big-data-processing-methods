@@ -14,12 +14,24 @@ flowchart LR
     S4["Process"]
     S5["Learn"]
     S6["Teach"]
-    S0 --> S1
-    S1 --> S2
-    S2 --> S3
-    S3 --> S4
-    S4 --> S5
-    S5 --> S6
+
+    S0 --> S1 --> S2 --> S3 --> S4 --> S5 --> S6
+
+    classDef sense fill:#E8F4FF,stroke:#2474B5,color:#12324A,stroke-width:2px
+    classDef flow fill:#E5F7F5,stroke:#0E8F83,color:#073B37,stroke-width:2px
+    classDef store fill:#EEF2F7,stroke:#667085,color:#273240,stroke-width:2px
+    classDef process fill:#F0EAFB,stroke:#7251B5,color:#2F1F4F,stroke-width:2px
+    classDef learn fill:#E9F7EC,stroke:#3C8C53,color:#173F22,stroke-width:2px
+    classDef teach fill:#FFF1E6,stroke:#D97706,color:#5C2D0C,stroke-width:2px
+
+    class S0 sense
+    class S1,S2 flow
+    class S3 store
+    class S4 process
+    class S5 learn
+    class S6 teach
+
+    linkStyle default stroke:#64748B,stroke-width:2px
 ```
 
 ### Как читать этот пайплайн
@@ -68,15 +80,31 @@ flowchart LR
 
 ```mermaid
 flowchart LR
-    R["Робот / группа роботов"] --> RT["Контур реального времени"]
-    R --> EDGE["Edge-обработка"]
-    EDGE --> STREAM["Поток событий и телеметрии"]
-    STREAM --> HOT["Оперативное хранилище"]
-    STREAM --> LAKE["Data Lake / архив"]
-    HOT --> MON["Мониторинг и предупреждения"]
-    LAKE --> ML["Обучение и переобучение моделей"]
-    LAKE --> DT["Симуляция / цифровой двойник"]
-    ML --> R
+    R["Робот / парк<br/>роботов"] --> RT["Контур<br/>реального времени"]
+    R --> EDGE["Edge-<br/>обработка"]
+    EDGE --> STREAM["Поток<br/>телеметрии"]
+    STREAM --> HOT["Оперативное<br/>хранилище"]
+    STREAM --> LAKE["Data Lake<br/>архив"]
+    HOT --> MON["Мониторинг<br/>и предупреждения"]
+    LAKE --> ML["Обучение<br/>моделей"]
+    LAKE --> DT["Симуляция /<br/>цифровой двойник"]
+    ML -. новая модель .-> R
+
+    classDef source fill:#E8F4FF,stroke:#2474B5,color:#12324A,stroke-width:2px
+    classDef realtime fill:#FFF1E6,stroke:#D97706,color:#5C2D0C,stroke-width:2px
+    classDef transport fill:#E5F7F5,stroke:#0E8F83,color:#073B37,stroke-width:2px
+    classDef storage fill:#EEF2F7,stroke:#667085,color:#273240,stroke-width:2px
+    classDef analytics fill:#F0EAFB,stroke:#7251B5,color:#2F1F4F,stroke-width:2px
+    classDef result fill:#E9F7EC,stroke:#3C8C53,color:#173F22,stroke-width:2px
+
+    class R source
+    class RT realtime
+    class EDGE,STREAM transport
+    class HOT,LAKE storage
+    class ML,DT analytics
+    class MON result
+
+    linkStyle default stroke:#64748B,stroke-width:2px
 ```
 
 Это означает, что **одни и те же данные имеют несколько жизней**:
@@ -213,8 +241,18 @@ flowchart TD
     PC --> Y["y"]
     PC --> Z["z"]
     PC --> I["intensity"]
-    PC --> R["ring (optional)"]
-    PC --> T["time / range (optional)"]
+    PC --> R["ring<br/>(необяз.)"]
+    PC --> T["time / range<br/>(необяз.)"]
+
+    classDef root fill:#E8F4FF,stroke:#2474B5,color:#12324A,stroke-width:2px
+    classDef coord fill:#E5F7F5,stroke:#0E8F83,color:#073B37,stroke-width:2px
+    classDef extra fill:#FFF1E6,stroke:#D97706,color:#5C2D0C,stroke-width:2px
+
+    class PC root
+    class X,Y,Z,I coord
+    class R,T extra
+
+    linkStyle default stroke:#64748B,stroke-width:2px
 ```
 
 Big Data задача возникает из сочетания:
@@ -254,9 +292,21 @@ $$D=\sum_{t=1}^{n-1}\lVert\mathbf{p}_{t+1}-\mathbf{p}_t\rVert_2.$$
 
 ```mermaid
 flowchart LR
-    IMU["IMU driver"] -->|topic /imu/data| EST["Estimator"]
-    IMU -->|same topic| BAG["rosbag2 recorder"]
-    BAG --> MCAP["MCAP / SQLite3"]
+    IMU["Драйвер<br/>IMU"] -->|/imu/data| EST["Оценка<br/>состояния"]
+    IMU -->|тот же топик| BAG["Запись<br/>rosbag2"]
+    BAG --> MCAP["MCAP /<br/>SQLite3"]
+
+    classDef source fill:#E8F4FF,stroke:#2474B5,color:#12324A,stroke-width:2px
+    classDef process fill:#F0EAFB,stroke:#7251B5,color:#2F1F4F,stroke-width:2px
+    classDef transport fill:#E5F7F5,stroke:#0E8F83,color:#073B37,stroke-width:2px
+    classDef storage fill:#EEF2F7,stroke:#667085,color:#273240,stroke-width:2px
+
+    class IMU source
+    class EST process
+    class BAG transport
+    class MCAP storage
+
+    linkStyle default stroke:#64748B,stroke-width:2px
 ```
 
 **Topic (топик)** — логический канал сообщений определённого типа. Он не является файлом и не обязан хранить историю: это прежде всего механизм обмена данными между компонентами.
@@ -297,9 +347,19 @@ rosbag2 разделяет:
 
 ```mermaid
 flowchart TD
-    TOP["ROS 2 topics"] --> WR["rosbag2 writer"]
-    WR --> MCAP["MCAP storage"]
-    WR --> SQL["SQLite3 storage"]
+    TOP["Топики<br/>ROS 2"] --> WR["Запись<br/>rosbag2"]
+    WR --> MCAP["MCAP"]
+    WR --> SQL["SQLite3"]
+
+    classDef source fill:#E8F4FF,stroke:#2474B5,color:#12324A,stroke-width:2px
+    classDef process fill:#E5F7F5,stroke:#0E8F83,color:#073B37,stroke-width:2px
+    classDef storage fill:#EEF2F7,stroke:#667085,color:#273240,stroke-width:2px
+
+    class TOP source
+    class WR process
+    class MCAP,SQL storage
+
+    linkStyle default stroke:#64748B,stroke-width:2px
 ```
 
 ### MCAP
@@ -364,12 +424,24 @@ ROS 2 обычно использует **CDR (Common Data Representation — о
 Простая аналогия: схема сообщения — это «форма анкеты», объект — заполненная анкета, а CDR-последовательность — упакованный бинарный конверт для передачи.
 
 ```mermaid
-flowchart TD
-    OBJ1["ROS 2 message object"] --> SER["Serialize"]
-    SER --> CDR["CDR bytes"]
-    CDR --> IO["Network / rosbag2"]
-    IO --> DES["Deserialize"]
-    DES --> OBJ2["ROS 2 message object"]
+flowchart LR
+    OBJ1["Объект<br/>ROS 2"] --> SER["Сериализация"]
+    SER --> CDR["CDR<br/>байты"]
+    CDR --> IO["Сеть /<br/>rosbag2"]
+    IO --> DES["Десериализация"]
+    DES --> OBJ2["Объект<br/>ROS 2"]
+
+    classDef object fill:#E8F4FF,stroke:#2474B5,color:#12324A,stroke-width:2px
+    classDef process fill:#F0EAFB,stroke:#7251B5,color:#2F1F4F,stroke-width:2px
+    classDef bytes fill:#E5F7F5,stroke:#0E8F83,color:#073B37,stroke-width:2px
+    classDef io fill:#EEF2F7,stroke:#667085,color:#273240,stroke-width:2px
+
+    class OBJ1,OBJ2 object
+    class SER,DES process
+    class CDR bytes
+    class IO io
+
+    linkStyle default stroke:#64748B,stroke-width:2px
 ```
 
 Нужно различать:
@@ -458,11 +530,23 @@ Python-инструменты MCAP поддерживают работу со с
 
 ```mermaid
 flowchart TD
-    M["MCAP"] --> S["Schema"]
-    M --> AX["Channel /imu/ax"]
-    M --> AY["Channel /imu/ay"]
-    M --> AZ["Channel /imu/az"]
-    M --> MSG["Timestamped CDR messages"]
+    M["MCAP"] --> S["Схема"]
+    M --> AX["Канал<br/>/imu/ax"]
+    M --> AY["Канал<br/>/imu/ay"]
+    M --> AZ["Канал<br/>/imu/az"]
+    M --> MSG["CDR-сообщения<br/>+ время"]
+
+    classDef root fill:#E8F4FF,stroke:#2474B5,color:#12324A,stroke-width:2px
+    classDef schema fill:#F0EAFB,stroke:#7251B5,color:#2F1F4F,stroke-width:2px
+    classDef channel fill:#E5F7F5,stroke:#0E8F83,color:#073B37,stroke-width:2px
+    classDef message fill:#FFF1E6,stroke:#D97706,color:#5C2D0C,stroke-width:2px
+
+    class M root
+    class S schema
+    class AX,AY,AZ channel
+    class MSG message
+
+    linkStyle default stroke:#64748B,stroke-width:2px
 ```
 
 Для Google Colab это важный архитектурный приём: bag становится обычным входным **data artifact (артефактом данных, то есть файлом — результатом работы системы)**, а не причиной разворачивать полноценную middleware-инфраструктуру.
@@ -502,15 +586,29 @@ $$\left|t_i^{\mathrm{IMU}}-t_{j^*}^{\mathrm{LiDAR}}\right|\le\varepsilon.$$
 Передавать все **raw sensor data (сырые сенсорные данные)** в центральную систему не всегда возможно: ограничены пропускная способность сети, накопитель, вычислительные ресурсы и допустимая задержка.
 
 ```mermaid
-flowchart TD
-    S["Sensors"] --> E["Edge computer"]
-    E --> F["Filter"]
-    F --> SY["Synchronize"]
-    SY --> DS["Downsample"]
-    DS --> C["Compress"]
-    C --> FE["Feature extraction"]
-    FE --> OUT["Reduced stream"]
-    OUT --> KS["Kafka / Storage"]
+flowchart LR
+    S["Датчики"] --> E["Edge-<br/>узел"]
+    E --> F["Фильтрация"]
+    F --> SY["Синхронизация"]
+    SY --> DS["Понижение<br/>частоты"]
+    DS --> C["Сжатие"]
+    C --> FE["Извлечение<br/>признаков"]
+    FE --> OUT["Сокращённый<br/>поток"]
+    OUT --> KS["Kafka /<br/>хранилище"]
+
+    classDef source fill:#E8F4FF,stroke:#2474B5,color:#12324A,stroke-width:2px
+    classDef edge fill:#E5F7F5,stroke:#0E8F83,color:#073B37,stroke-width:2px
+    classDef process fill:#F0EAFB,stroke:#7251B5,color:#2F1F4F,stroke-width:2px
+    classDef output fill:#E9F7EC,stroke:#3C8C53,color:#173F22,stroke-width:2px
+    classDef storage fill:#EEF2F7,stroke:#667085,color:#273240,stroke-width:2px
+
+    class S source
+    class E edge
+    class F,SY,DS,C,FE process
+    class OUT output
+    class KS storage
+
+    linkStyle default stroke:#64748B,stroke-width:2px
 ```
 
 Что делают этапы:
@@ -564,11 +662,27 @@ $$f_s>2f_{\mathrm{max}}.$$
 
 ```mermaid
 flowchart LR
-    S["Телеметрия"] --> ST["Streaming"]
-    ST --> A["Тревога / текущее состояние"]
+    S["Поток<br/>телеметрии"] --> ST["Streaming<br/>поток"]
+    ST --> A["Тревога /<br/>текущее состояние"]
     S --> B["Архив"]
-    B --> BA["Batch"]
-    BA --> R["Отчёт / обучение / сравнение миссий"]
+    B --> BA["Batch<br/>пакет"]
+    BA --> R["Отчёт / обучение<br/>сравнение миссий"]
+
+    classDef source fill:#E8F4FF,stroke:#2474B5,color:#12324A,stroke-width:2px
+    classDef streaming fill:#E5F7F5,stroke:#0E8F83,color:#073B37,stroke-width:2px
+    classDef alert fill:#FFF1E6,stroke:#D97706,color:#5C2D0C,stroke-width:2px
+    classDef storage fill:#EEF2F7,stroke:#667085,color:#273240,stroke-width:2px
+    classDef batch fill:#F0EAFB,stroke:#7251B5,color:#2F1F4F,stroke-width:2px
+    classDef result fill:#E9F7EC,stroke:#3C8C53,color:#173F22,stroke-width:2px
+
+    class S source
+    class ST streaming
+    class A alert
+    class B storage
+    class BA batch
+    class R result
+
+    linkStyle default stroke:#64748B,stroke-width:2px
 ```
 
 Потоковая обработка преобладает там, где ценность результата быстро падает со временем: перегрев двигателя полезно заметить **сейчас**, а не в отчёте вечером. Пакетная обработка выгоднее, когда важен полный исторический набор и немедленная реакция не требуется.
@@ -626,9 +740,19 @@ ORDER BY bucket, robot_id;
 **Continuous aggregate (непрерывный агрегат)** хранит заранее вычисляемые и постепенно обновляемые временные агрегаты. Это экономит повторные вычисления: системе не нужно каждый раз пересчитывать среднее за час из миллионов исходных строк [11].
 
 ```mermaid
-flowchart TD
-    RAW["Raw data<br/>1-second resolution"] --> M1["1-minute aggregate"]
-    M1 --> H1["1-hour aggregate"]
+flowchart LR
+    RAW["Сырые данные<br/>1 с"] --> M1["Агрегат<br/>1 мин"]
+    M1 --> H1["Агрегат<br/>1 ч"]
+
+    classDef raw fill:#E8F4FF,stroke:#2474B5,color:#12324A,stroke-width:2px
+    classDef mid fill:#E5F7F5,stroke:#0E8F83,color:#073B37,stroke-width:2px
+    classDef long fill:#E9F7EC,stroke:#3C8C53,color:#173F22,stroke-width:2px
+
+    class RAW raw
+    class M1 mid
+    class H1 long
+
+    linkStyle default stroke:#64748B,stroke-width:2px
 ```
 
 ---
@@ -777,15 +901,29 @@ result.show()
 Теперь объединим термины в одну архитектуру. Важно понимать, что разные хранилища решают **разные задачи**, а не конкурируют за роль «единственной базы».
 
 ```mermaid
-flowchart TD
-    S["IMU / LiDAR<br/>motor / battery"] --> ROS["ROS 2 topics"]
-    ROS --> BAG["rosbag2 / MCAP"]
-    ROS --> EDGE["Edge features"]
-    BAG --> PROC["Spark / Flink"]
+flowchart LR
+    S["Датчики<br/>IMU • LiDAR<br/>мотор • батарея"] --> ROS["Топики<br/>ROS 2"]
+    ROS --> BAG["rosbag2<br/>MCAP"]
+    ROS --> EDGE["Edge-<br/>признаки"]
+    BAG --> PROC["Spark /<br/>Flink"]
     EDGE --> PROC
-    PROC --> TSDB["Time-Series DB"]
-    PROC --> LAKE["Data Lake / Parquet"]
-    TSDB --> DASH["Dashboard / alerts"]
+    PROC --> TSDB["TSDB"]
+    PROC --> LAKE["Data Lake<br/>Parquet"]
+    TSDB --> DASH["Панель<br/>и тревоги"]
+
+    classDef source fill:#E8F4FF,stroke:#2474B5,color:#12324A,stroke-width:2px
+    classDef transport fill:#E5F7F5,stroke:#0E8F83,color:#073B37,stroke-width:2px
+    classDef storage fill:#EEF2F7,stroke:#667085,color:#273240,stroke-width:2px
+    classDef process fill:#F0EAFB,stroke:#7251B5,color:#2F1F4F,stroke-width:2px
+    classDef result fill:#E9F7EC,stroke:#3C8C53,color:#173F22,stroke-width:2px
+
+    class S source
+    class ROS,EDGE transport
+    class BAG,TSDB,LAKE storage
+    class PROC process
+    class DASH result
+
+    linkStyle default stroke:#64748B,stroke-width:2px
 ```
 
 Расшифровка новых терминов:
@@ -825,7 +963,7 @@ Open-RMF (Robotics Middleware Framework) — пример современной
 
 ```mermaid
 flowchart LR
-    R1["Робот 1"] --> F["Fleet management"]
+    R1["Робот 1"] --> F["Управление<br/>флотом"]
     R2["Робот 2"] --> F
     R3["Робот N"] --> F
     F --> T["Задания"]
@@ -833,6 +971,18 @@ flowchart LR
     F --> E["События"]
     M --> TS["TSDB"]
     E --> DL["Data Lake"]
+
+    classDef robot fill:#E8F4FF,stroke:#2474B5,color:#12324A,stroke-width:2px
+    classDef fleet fill:#E5F7F5,stroke:#0E8F83,color:#073B37,stroke-width:2px
+    classDef process fill:#F0EAFB,stroke:#7251B5,color:#2F1F4F,stroke-width:2px
+    classDef storage fill:#EEF2F7,stroke:#667085,color:#273240,stroke-width:2px
+
+    class R1,R2,R3 robot
+    class F fleet
+    class T,M,E process
+    class TS,DL storage
+
+    linkStyle default stroke:#64748B,stroke-width:2px
 ```
 
 Здесь Big Data появляется уже не только из-за тяжёлой камеры или LiDAR, но и из-за **масштаба эксплуатации**: много роботов, много миссий, длинная история и необходимость сравнивать поведение системы.
@@ -857,12 +1007,26 @@ NVIDIA Isaac Sim, например, поддерживает ROS 2, физиче
 Использовать смартфон как знакомый объект:
 
 ```mermaid
-flowchart TD
-    P["Физическое явление"] --> S["Датчик"]
-    S --> V["Число + timestamp"]
-    V --> Q["Последовательность измерений"]
+flowchart LR
+    P["Физическое<br/>явление"] --> S["Датчик"]
+    S --> V["Число +<br/>timestamp"]
+    V --> Q["Ряд<br/>измерений"]
     Q --> A["Алгоритм"]
     A --> D["Решение"]
+
+    classDef physical fill:#E8F4FF,stroke:#2474B5,color:#12324A,stroke-width:2px
+    classDef sensor fill:#E5F7F5,stroke:#0E8F83,color:#073B37,stroke-width:2px
+    classDef data fill:#EEF2F7,stroke:#667085,color:#273240,stroke-width:2px
+    classDef process fill:#F0EAFB,stroke:#7251B5,color:#2F1F4F,stroke-width:2px
+    classDef result fill:#E9F7EC,stroke:#3C8C53,color:#173F22,stroke-width:2px
+
+    class P physical
+    class S sensor
+    class V,Q data
+    class A process
+    class D result
+
+    linkStyle default stroke:#64748B,stroke-width:2px
 ```
 
 ### Как «разжевать» архитектуру студенту
